@@ -339,6 +339,25 @@ _ghostty_deferred_init() {
       }
     fi
 
+    # mostty: run Claude Code with mostty's hooks (working / waiting / finished
+    # status and notifications) without installing anything into ~/.claude.
+    # Skipped if the user already has a `claude` function or passes --settings.
+    if [[ "$__CFBundleIdentifier" == "com.mostty.app" ]] &&
+       [[ -r "$GHOSTTY_RESOURCES_DIR/shell-integration/claude/settings.json" ]] &&
+       (( ! $+functions[claude] )); then
+      function claude() {
+        builtin local arg
+        for arg in "$@"; do
+          if [[ "$arg" == --settings || "$arg" == --settings=* ]]; then
+            builtin command claude "$@"
+            builtin return
+          fi
+        done
+        MOSTTY_CLAUDE_HOOKS=1 builtin command claude \
+          --settings "$GHOSTTY_RESOURCES_DIR/shell-integration/claude/settings.json" "$@"
+      }
+    fi
+
     # Some zsh users manually run `source ~/.zshrc` in order to apply rc file
     # changes to the current shell. This is a terrible practice that breaks many
     # things, including our shell integration. For example, Oh My Zsh and Prezto

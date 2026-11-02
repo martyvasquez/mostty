@@ -1,0 +1,85 @@
+{
+  "preferredNotifChannel": "notifications_disabled",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/bash \"$GHOSTTY_RESOURCES_DIR/shell-integration/claude/mostty-notify.sh\" --bundled"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/bash \"$GHOSTTY_RESOURCES_DIR/shell-integration/claude/mostty-notify.sh\" --bundled"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/bash \"$GHOSTTY_RESOURCES_DIR/shell-integration/claude/mostty-notify.sh\" --bundled"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/bash \"$GHOSTTY_RESOURCES_DIR/shell-integration/claude/mostty-notify.sh\" --bundled"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/bash \"$GHOSTTY_RESOURCES_DIR/shell-integration/claude/mostty-notify.sh\" --bundled"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/bash \"$GHOSTTY_RESOURCES_DIR/shell-integration/claude/mostty-notify.sh\" --bundled"
+          }
+        ]
+      }
+    ],
+    "StopFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/bash \"$GHOSTTY_RESOURCES_DIR/shell-integration/claude/mostty-notify.sh\" --bundled"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/bash \"$GHOSTTY_RESOURCES_DIR/shell-integration/claude/mostty-notify.sh\" --bundled"
+          }
+        ]
+      }
+    ]
+  }
+}

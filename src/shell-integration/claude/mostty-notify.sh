@@ -1,7 +1,9 @@
 #!/bin/bash
 # mostty: Claude Code hook -> terminal status + notification.
 #
-# Registered for: SessionStart, UserPromptSubmit, PreToolUse, PostToolUse,
+# Ships inside mostty.app. mostty's shell integration wraps the `claude`
+# command so it runs with `--settings <this dir>/settings.json`, which
+# registers this script for: SessionStart, UserPromptSubmit, PreToolUse, PostToolUse,
 # Notification, Stop, StopFailure, SessionEnd.
 #
 # It writes OSC 777 sequences to the terminal Claude is running in:
@@ -17,6 +19,10 @@
 # can never block Claude or interfere with Remote Control.
 
 input="$(cat)"
+
+# If an older copy of this script is also registered in ~/.claude/settings.json,
+# only the bundled one (--bundled) acts, so nothing is reported twice.
+[ -n "$MOSTTY_CLAUDE_HOOKS" ] && [ "$1" != "--bundled" ] && exit 0
 
 # Only act inside Ghostty / mostty.
 [ "$TERM_PROGRAM" = "ghostty" ] || exit 0

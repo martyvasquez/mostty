@@ -119,6 +119,22 @@ function __ghostty_setup --on-event fish_prompt -d "Setup ghostty integration"
         end
     end
 
+    # mostty: run Claude Code with mostty's hooks (working / waiting / finished
+    # status and notifications) without installing anything into ~/.claude.
+    # Skipped if the user already has a `claude` function or passes --settings.
+    if test "$__CFBundleIdentifier" = com.mostty.app
+        and test -r "$GHOSTTY_RESOURCES_DIR/shell-integration/claude/settings.json"
+        and not functions -q claude
+        function claude --wraps claude -d "Run Claude Code with mostty's hooks"
+            if contains -- --settings $argv; or string match -q -- '--settings=*' $argv >/dev/null
+                command claude $argv
+            else
+                MOSTTY_CLAUDE_HOOKS=1 command claude \
+                    --settings "$GHOSTTY_RESOURCES_DIR/shell-integration/claude/settings.json" $argv
+            end
+        end
+    end
+
     # SSH Integration
     #
     # Wrap `ssh` with `ghostty +ssh` and translate the shell-integration

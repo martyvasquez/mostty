@@ -114,6 +114,25 @@ if [[ "$GHOSTTY_SHELL_FEATURES" == *"sudo"* && -n "$TERMINFO" ]]; then
   }
 fi
 
+# mostty: run Claude Code with mostty's hooks (working / waiting / finished
+# status and notifications) without installing anything into ~/.claude.
+# Skipped if the user already has a `claude` function or passes --settings.
+if [[ "$__CFBundleIdentifier" == "com.mostty.app" ]] &&
+  [[ -r "$GHOSTTY_RESOURCES_DIR/shell-integration/claude/settings.json" ]] &&
+  ! builtin declare -F claude >/dev/null; then
+  function claude {
+    builtin local arg
+    for arg in "$@"; do
+      if [[ "$arg" == --settings || "$arg" == --settings=* ]]; then
+        builtin command claude "$@"
+        builtin return
+      fi
+    done
+    MOSTTY_CLAUDE_HOOKS=1 builtin command claude \
+      --settings "$GHOSTTY_RESOURCES_DIR/shell-integration/claude/settings.json" "$@"
+  }
+fi
+
 # SSH Integration
 #
 # Wrap `ssh` with `ghostty +ssh` and translate the shell-integration

@@ -40,13 +40,18 @@ tab of a workspace shows another one.
 
 ## Claude Code status + notifications
 
-Run once (re-run after updating mostty):
-
-    extras/claude/install-hooks.sh
-
-This registers `~/.claude/hooks/mostty-notify.sh` for Claude Code's
+Nothing to install. In mostty, `claude` runs with mostty's hooks for
 SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Notification, Stop,
-StopFailure and SessionEnd hooks. Each workspace in the sidebar then shows:
+StopFailure and SessionEnd: shell integration (zsh, bash, fish) wraps the
+`claude` command to add `--settings` pointing at the copy bundled in the app
+(`src/shell-integration/claude/`). `~/.claude` is never touched, other
+terminals are unaffected, and app updates update the hooks. It's skipped if
+you define your own `claude` function or pass `--settings` yourself.
+The bundled settings also turn off Claude Code's own built-in terminal
+alert (`preferredNotifChannel`), which otherwise repeats the hook's
+notification about a minute later.
+
+Each workspace in the sidebar shows:
 
 | Indicator | Meaning |
 | --- | --- |
