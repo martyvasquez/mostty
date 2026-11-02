@@ -76,6 +76,12 @@ final class TerminalRestorableState: TerminalRestorable {
     var titleOverride: String? {
         internalState.titleOverride
     }
+    var workspaceID: UUID? {
+        internalState.workspaceID
+    }
+    var claudeSessions: [String: WorkspaceNotifier.ClaudeSession] {
+        internalState.claudeSessions ?? [:]
+    }
 
     /// Internal State we use to perform unit tests
     ///
@@ -170,6 +176,14 @@ class TerminalWindowRestoration: NSObject, NSWindowRestoration {
 
         // Restore the tab title override
         c.titleOverride = state.titleOverride
+
+        // mostty: Restore the workspace membership
+        if let workspaceID = state.workspaceID {
+            c.workspaceID = workspaceID
+        }
+
+        // mostty: Resume Claude Code sessions that were open at quit
+        WorkspaceNotifier.shared.resume(state.claudeSessions, in: c.surfaceTree)
 
         // Setup our restored state on the controller
         // Find the focused surface in surfaceTree

@@ -20,6 +20,7 @@ enum AppIcon: Equatable, Codable, Sendable {
     init?(config: Ghostty.Config) {
         switch config.macosIcon {
         case .official:
+            // mostty: the bundled app icon is mostty's own (images/mostty.icon).
             return nil
         case .blueprint:
             self = .blueprint

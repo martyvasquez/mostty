@@ -6614,6 +6614,18 @@ fn showDesktopNotification(self: *Surface, title: [:0]const u8, body: [:0]const 
     // how fast identical notifications can be sent sequentially.
     const hash_algorithm = std.hash.Wyhash;
 
+    // mostty: "mostty" titled messages are agent status updates from the
+    // Claude Code hook script, handled by the macOS app and never shown as
+    // OS notifications. They bypass (and don't count toward) the rate limits.
+    if (std.mem.eql(u8, title, "mostty")) {
+        _ = try self.rt_app.performAction(
+            .{ .surface = self },
+            .desktop_notification,
+            .{ .title = title, .body = body },
+        );
+        return;
+    }
+
     const now: std.Io.Timestamp = .now(global.io(), .awake);
 
     // Set a limit of one desktop notification per second so that the OS

@@ -1126,6 +1126,12 @@ extension Ghostty {
             // On any keyDown event we unset our bell state
             bell = false
 
+            // mostty: Esc / ⌃C interrupts Claude Code, which fires no hook.
+            if event.keyCode == 53 ||
+                (event.modifierFlags.contains(.control) && event.charactersIgnoringModifiers == "c") {
+                MainActor.assumeIsolated { WorkspaceNotifier.shared.userInterrupted(self) }
+            }
+
             // We need to translate the mods (maybe) to handle configs such as option-as-alt
             let translationModsGhostty = Ghostty.eventModifierFlags(
                 mods: ghostty_surface_key_translation_mods(
@@ -1797,7 +1803,8 @@ extension Ghostty {
             content.title = title
             content.subtitle = self.title
             content.body = body
-            content.sound = UNNotificationSound.default
+            // mostty: the sound is played by WorkspaceNotifier instead so we
+            // don't double up on sounds.
             content.categoryIdentifier = Ghostty.userNotificationCategory
             content.userInfo = [
                 "surface": self.id.uuidString,
@@ -2254,6 +2261,15 @@ extension Ghostty.SurfaceView: NSServicesMenuRequestor {
         pboard.declareTypes([.string], owner: nil)
         pboard.setString(String(cString: text.text), forType: .string)
         return true
+    }
+
+    /// mostty: type text into the terminal as if pasted/typed.
+    func mosttySendText(_ text: String) {
+        guard let surface, !text.isEmpty else { return }
+        let len = text.utf8CString.count
+        text.withCString { ptr in
+            ghostty_surface_text(surface, ptr, UInt(len - 1))
+        }
     }
 
     func readSelection(from pboard: NSPasteboard) -> Bool {

@@ -15,6 +15,10 @@ extension TerminalRestorableState {
         let effectiveFullscreenMode: FullscreenMode?
         let tabColor: TerminalTabColor?
         let titleOverride: String?
+
+        // MARK: - mostty
+        let workspaceID: UUID?
+        let claudeSessions: [String: WorkspaceNotifier.ClaudeSession]?
     }
 }
 
@@ -26,6 +30,10 @@ extension TerminalRestorableState.InternalState where ViewType == Ghostty.Surfac
             effectiveFullscreenMode: controller.fullscreenStyle?.fullscreenMode,
             tabColor: (controller.window as? TerminalWindow)?.tabColor,
             titleOverride: controller.titleOverride,
+            workspaceID: controller.workspaceID,
+            claudeSessions: MainActor.assumeIsolated {
+                WorkspaceNotifier.shared.sessions(for: controller.surfaceTree)
+            },
         )
     }
 }

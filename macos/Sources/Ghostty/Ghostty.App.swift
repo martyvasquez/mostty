@@ -1610,7 +1610,23 @@ extension Ghostty {
                 guard let surfaceView = self.surfaceView(from: surface) else { return }
                 guard let title = String(cString: n.title!, encoding: .utf8) else { return }
                 guard let body = String(cString: n.body!, encoding: .utf8) else { return }
+
+                // mostty: control messages from the Claude Code hook script
+                // (agent working/waiting/idle) are state, not notifications.
+                if title == "mostty" {
+                    Task { @MainActor in
+                        WorkspaceNotifier.shared.handleControl(surface: surfaceView, body: body)
+                    }
+                    return
+                }
+
                 showDesktopNotification(surfaceView, title: title, body: body)
+
+                // mostty: sound + attention dot + in-window toast
+                NotificationCenter.default.post(
+                    name: .mosttyDesktopNotification,
+                    object: surfaceView,
+                    userInfo: ["title": title, "body": body])
 
             default:
                 assertionFailure()

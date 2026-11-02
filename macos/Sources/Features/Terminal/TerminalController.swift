@@ -18,6 +18,15 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
             return defaultValue
         }
 
+        // mostty: tabs live in the titlebar to the right of the full-height
+        // workspace sidebar, so we always use the titlebar-tabs window on
+        // macOS 26+ (unless the user explicitly hid the titlebar).
+#if compiler(>=6.2)
+        if #available(macOS 26.0, *), config.macosTitlebarStyle != .hidden {
+            return "TerminalTabsTitlebarTahoe"
+        }
+#endif
+
         let nib = switch config.macosTitlebarStyle {
         case .native: "Terminal"
         case .hidden: "TerminalHiddenTitlebar"
@@ -58,6 +67,17 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     /// The configuration derived from the Ghostty config so we don't need to rely on references.
     private(set) var derivedConfig: DerivedConfig
 
+    /// mostty: The workspace this window/tab belongs to. All tabs in a tab
+    /// group share a workspace (see WorkspaceManager).
+    var workspaceID: UUID
+
+    /// mostty: When set, newly created controllers join this workspace instead
+    /// of the workspace of the currently focused window.
+    static var pendingWorkspaceID: UUID?
+
+    /// mostty: The workspace of the most recently main window.
+    static var lastMainWorkspaceID: UUID? { lastMain?.workspaceID }
+
     /// The notification cancellable for focused surface property changes.
     private var surfaceAppearanceCancellables: Set<AnyCancellable> = []
 
@@ -75,6 +95,12 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
 
         // Setup our initial derived config based on the current app config
         self.derivedConfig = DerivedConfig(ghostty.config)
+
+        // mostty: New tabs join their parent's workspace, new windows join the
+        // explicitly requested workspace or else become a new workspace.
+        self.workspaceID = (parent?.windowController as? TerminalController)?.workspaceID
+            ?? Self.pendingWorkspaceID
+            ?? UUID()
 
         super.init(ghostty, baseConfig: base, surfaceTree: tree)
 
@@ -439,6 +465,15 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
             alert.alertStyle = .warning
             alert.beginSheetModal(for: parent)
             return nil
+        }
+
+        // mostty: new tabs in a workspace with a project folder open there.
+        var baseConfig = baseConfig
+        if let folder = WorkspaceManager.shared.folder(for: parentController.workspaceID),
+           FileManager.default.fileExists(atPath: folder) {
+            var config = baseConfig ?? Ghostty.SurfaceConfiguration()
+            config.workingDirectory = folder
+            baseConfig = config
         }
 
         // Create a new window and add it to the parent
@@ -1027,10 +1062,12 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         let tabIndex: Int?
         weak var tabGroup: NSWindowTabGroup?
         let tabColor: TerminalTabColor
+        var workspaceID: UUID? = nil
     }
 
     convenience init(_ ghostty: Ghostty.App, with undoState: UndoState) {
         self.init(ghostty, withSurfaceTree: undoState.surfaceTree)
+        if let workspaceID = undoState.workspaceID { self.workspaceID = workspaceID }
 
         // Show the window and restore its frame
         showWindow(nil)
@@ -1082,7 +1119,8 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
             focusedSurface: focusedSurface?.id,
             tabIndex: window.tabGroup?.windows.firstIndex(of: window),
             tabGroup: window.tabGroup,
-            tabColor: (window as? TerminalWindow)?.tabColor ?? .none)
+            tabColor: (window as? TerminalWindow)?.tabColor ?? .none,
+            workspaceID: workspaceID)
     }
 
     // MARK: - NSWindowController
@@ -1114,7 +1152,9 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
 
         // Initialize our content view to the SwiftUI root
         let container = TerminalViewContainer {
-            TerminalView(ghostty: ghostty, viewModel: self, delegate: self)
+            WorkspaceSidebarContainer(ghostty: self.ghostty) {
+                TerminalView(ghostty: self.ghostty, viewModel: self, delegate: self)
+            }
         }
 
         // Set the initial content size on the container so that
@@ -1335,7 +1375,8 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
 
         confirmClose(
             messageText: "Close Tab?",
-            informativeText: "The terminal still has a running process. If you close the tab the process will be killed."
+            informativeText: WorkspaceNotifier.shared.closeWarning(for: Array(surfaceTree), action: "close the tab")
+                ?? "The terminal still has a running process. If you close the tab the process will be killed."
         ) {
             self.closeTabImmediately()
         }
@@ -1457,7 +1498,12 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
             // attached to the window that needs confirmation.
             confirmControllers[0].confirmClose(
                 messageText: "Close Window?",
-                informativeText: "All terminal sessions in this window will be terminated.",
+                informativeText: WorkspaceNotifier.shared.closeWarning(
+                    for: windows
+                        .compactMap { $0.windowController as? TerminalController }
+                        .flatMap { Array($0.surfaceTree) },
+                    action: "close the window")
+                    ?? "All terminal sessions in this window will be terminated.",
             ) {
                 self.closeWindowImmediately()
             }
@@ -1484,7 +1530,8 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         for controller in controllers {
             let response = await controller.confirmCloseAsync(
                 messageText: "Close Window?",
-                informativeText: "All terminal sessions in this window will be terminated.",
+                informativeText: WorkspaceNotifier.shared.closeWarning(for: Array(controller.surfaceTree), action: "close it")
+                    ?? "All terminal sessions in this window will be terminated.",
             )
 
             if [.OK, .alertFirstButtonReturn].contains(response) {

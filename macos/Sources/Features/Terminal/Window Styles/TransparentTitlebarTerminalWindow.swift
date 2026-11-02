@@ -96,7 +96,12 @@ class TransparentTitlebarTerminalWindow: TerminalWindow {
             let isTransparentTitlebar = derivedConfig.macosTitlebarStyle == .transparent ||
             derivedConfig.macosTitlebarStyle == .tabs
 
-            titlebarView.layer?.backgroundColor = (isGlassStyle && isTransparentTitlebar)
+            // mostty: the titlebar-tabs window has full-size content (the
+            // workspace sidebar runs underneath the titlebar), so keep the
+            // titlebar clear outside of fullscreen and let the content show.
+            let mosttyFullSize = self is TitlebarTabsTahoeTerminalWindow && !styleMask.contains(.fullScreen)
+
+            titlebarView.layer?.backgroundColor = ((isGlassStyle && isTransparentTitlebar) || mosttyFullSize)
                 ? NSColor.clear.cgColor
                 : preferredBackgroundColor?.cgColor
         }

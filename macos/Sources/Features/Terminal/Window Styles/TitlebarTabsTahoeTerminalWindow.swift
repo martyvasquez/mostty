@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 /// `macos-titlebar-style = tabs` for macOS 26 (Tahoe) and later.
@@ -15,6 +16,21 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
 
     deinit {
         tabBarObserver = nil
+    }
+
+    /// mostty: the tab bar's leading constraint, updated when the workspace
+    /// sidebar is shown/hidden so tabs always start right of the sidebar.
+    private var tabBarLeftConstraint: NSLayoutConstraint?
+    private var sidebarCancellable: AnyCancellable?
+
+    private var tabBarLeftPadding: CGFloat {
+        if WorkspaceManager.shared.sidebarVisible {
+            return WorkspaceManager.sidebarWidth + 1 + WorkspaceManager.contentGap
+        }
+        return switch self.derivedConfig.macosWindowButtons {
+        case .hidden: 0
+        case .visible: 70
+        }
     }
 
     // MARK: NSWindow
@@ -50,6 +66,22 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
         toolbar.centeredItemIdentifiers.insert(.title)
         self.toolbar = toolbar
         toolbarStyle = .unifiedCompact
+
+        // mostty: let content extend under the titlebar so the workspace
+        // sidebar can run the full height of the window. The terminal itself
+        // still respects the safe area and starts below the tab bar.
+        styleMask.insert(.fullSizeContentView)
+
+        sidebarCancellable = WorkspaceManager.shared.$sidebarVisible
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                DispatchQueue.main.async { self?.updateTabBarLeftPadding() }
+            }
+    }
+
+    /// mostty: re-pad the tab bar after the sidebar is toggled.
+    func updateTabBarLeftPadding() {
+        tabBarLeftConstraint?.constant = tabBarLeftPadding
     }
     // Called after new tab finishes adjusting and setupTabBar is called in order to prevent Tab Bar hiding/size bug that occurs with some interactions with Mac UI
     override func syncAppearance(_ surfaceConfig: Ghostty.SurfaceView.DerivedConfig) {
@@ -177,12 +209,9 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
         // The container is the view that we'll constrain our tab bar within.
         let container = toolbarView
 
-        // The padding for the tab bar. If we're showing window buttons then
-        // we need to offset the window buttons.
-        let leftPadding: CGFloat = switch self.derivedConfig.macosWindowButtons {
-        case .hidden: 0
-        case .visible: 70
-        }
+        // The padding for the tab bar. mostty: start right of the workspace
+        // sidebar (which sits under the window buttons).
+        let leftPadding = tabBarLeftPadding
 
         // Constrain the accessory clip view (the parent of the accessory view
         // usually that clips the children) to the container view.
@@ -190,8 +219,13 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
         accessoryView.translatesAutoresizingMaskIntoConstraints = false
 
         // Setup all our constraints
+        // mostty: setup re-runs whenever the tab bar resizes; drop our old
+        // leading constraint first so it can't fight the new one.
+        tabBarLeftConstraint?.isActive = false
+        let leftConstraint = clipView.leftAnchor.constraint(equalTo: container.leftAnchor, constant: leftPadding)
+        tabBarLeftConstraint = leftConstraint
         NSLayoutConstraint.activate([
-            clipView.leftAnchor.constraint(equalTo: container.leftAnchor, constant: leftPadding),
+            leftConstraint,
             clipView.rightAnchor.constraint(equalTo: container.rightAnchor),
             clipView.topAnchor.constraint(equalTo: container.topAnchor, constant: 2),
             clipView.heightAnchor.constraint(equalTo: container.heightAnchor),

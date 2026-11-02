@@ -486,7 +486,8 @@ class BaseTerminalController: NSWindowController,
         // being shown, and provides no callback to detect this.
         confirmClose(
             messageText: "Close Terminal?",
-            informativeText: "The terminal still has a running process. If you close the terminal the process will be killed."
+            informativeText: WorkspaceNotifier.shared.closeWarning(for: node.leaves(), action: "close it")
+                ?? "The terminal still has a running process. If you close the terminal the process will be killed."
         ) { [weak self] in
             if let self {
                 self.removeSurfaceNode(node)
@@ -905,7 +906,24 @@ class BaseTerminalController: NSWindowController,
             result = "🔔 \(result)"
         }
 
+        // mostty: show Claude's state on the tab itself.
+        let notifier = WorkspaceNotifier.shared
+        let states = surfaceTree.map { notifier.agentState($0) }
+        if states.contains(.waiting) {
+            result = "🟠 \(result)"
+        } else if states.contains(.working) {
+            result = "⏳ \(result)"
+        }
+
         return result
+    }
+
+    /// mostty: recompute the window/tab title (e.g. after Claude's state changed).
+    func mosttyRefreshTitle() {
+        if let surface = focusedSurface, surfaceTree.contains(surface) {
+            lastComputedTitle = computeTitle(title: surface.title, bell: surface.bell)
+        }
+        applyTitleToWindow()
     }
 
     private func titleDidChange(to: String) {
@@ -1220,7 +1238,8 @@ class BaseTerminalController: NSWindowController,
         // We require confirmation, so show an alert as long as we aren't already.
         confirmClose(
             messageText: "Close Terminal?",
-            informativeText: "The terminal still has a running process. If you close the terminal the process will be killed."
+            informativeText: WorkspaceNotifier.shared.closeWarning(for: Array(surfaceTree), action: "close it")
+                ?? "The terminal still has a running process. If you close the terminal the process will be killed."
         ) { [weak self] in
             self?.window?.close()
         }

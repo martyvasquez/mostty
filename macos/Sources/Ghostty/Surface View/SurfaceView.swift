@@ -131,10 +131,9 @@ extension Ghostty {
                     )
                 }
 
-                // Show bell border if enabled
-                if ghostty.config.bellFeatures.contains(.border) {
-                    BellBorderOverlay(bell: surfaceView.bell)
-                }
+                // Show bell border. mostty: always on, so a pane that needs
+                // attention (e.g. Claude finished) gets a ring.
+                BellBorderOverlay(bell: surfaceView.bell)
 
                 // Show a highlight effect when this surface needs attention
                 HighlightOverlay(highlighted: surfaceView.highlighted)

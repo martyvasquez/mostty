@@ -229,8 +229,15 @@ class AppDelegate: NSObject,
         // Initial config loading
         ghosttyConfigDidChange(config: ghostty.config)
 
-        // Start our update checker.
-        updateController.startUpdater()
+        // mostty: workspaces + notifications
+        WorkspaceMenu.shared.install()
+        menuCheckForUpdates?.isHidden = true
+        WorkspaceNotifier.shared.start()
+
+        // mostty: The updater is intentionally disabled. Sparkle would replace
+        // this fork with an official Ghostty release. Update by pulling
+        // upstream and rebuilding (see MOSTTY.md).
+        // updateController.startUpdater()
 
         // Register our service provider. This must happen after everything is initialized.
         NSApp.servicesProvider = ServiceProvider()
@@ -420,6 +427,10 @@ class AppDelegate: NSObject,
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        // mostty: Claude sessions ending from here on end because we're
+        // quitting; keep them so they resume on next launch.
+        WorkspaceNotifier.shared.isTerminating = true
+
         // We have no notifications we want to persist after death,
         // so remove them all now. In the future we may want to be
         // more selective and only remove surface-targeted notifications.
@@ -746,7 +757,7 @@ class AppDelegate: NSObject,
         }
     }
 
-    private func syncDockBadge() {
+    func syncDockBadge() {
         let center = UNUserNotificationCenter.current()
         center.getNotificationSettings { settings in
             switch settings.authorizationStatus {
@@ -799,9 +810,17 @@ class AppDelegate: NSObject,
     }
 
     private func setDockBadge() {
-        let bellCount = NSApp.windows
-            .compactMap { $0.windowController as? BaseTerminalController }
-            .reduce(0) { $0 + ($1.bell ? 1 : 0) }
+        // mostty: count tabs that need attention: a bell (e.g. Claude
+        // finished) or Claude waiting for the user.
+        let bellCount = MainActor.assumeIsolated {
+            let notifier = WorkspaceNotifier.shared
+            return NSApp.windows
+                .compactMap { $0.windowController as? BaseTerminalController }
+                .reduce(0) { count, c in
+                    let waiting = c.surfaceTree.contains { notifier.agentState($0) == .waiting }
+                    return count + ((c.bell || waiting) ? 1 : 0)
+                }
+        }
         let wantsBadge = ghostty.config.bellFeatures.contains(.attention) && bellCount > 0
         let label = wantsBadge ? (bellCount > 99 ? "99+" : String(bellCount)) : nil
         NSApp.dockTile.badgeLabel = label
@@ -818,8 +837,10 @@ class AppDelegate: NSObject,
         switch config.windowSaveState {
         case "never": UserDefaults.ghostty.setValue(false, forKey: "NSQuitAlwaysKeepsWindows")
         case "always": UserDefaults.ghostty.setValue(true, forKey: "NSQuitAlwaysKeepsWindows")
+        // mostty: workspaces and Claude session resume live in the restored
+        // window state, so restore by default. "never" is still honored.
         case "default": fallthrough
-        default: UserDefaults.ghostty.removeObject(forKey: "NSQuitAlwaysKeepsWindows")
+        default: UserDefaults.ghostty.setValue(true, forKey: "NSQuitAlwaysKeepsWindows")
         }
 
         // Sync our auto-update settings. If SUEnableAutomaticChecks (in our Info.plist) is
@@ -1005,7 +1026,8 @@ class AppDelegate: NSObject,
     }
 
     @IBAction func checkForUpdates(_ sender: Any?) {
-        updateController.checkForUpdates()
+        // mostty: updates come from rebuilding the fork, never from Sparkle.
+        return
         // UpdateSimulator.happyPath.simulate(with: updateViewModel)
     }
 
@@ -1378,8 +1400,9 @@ extension AppDelegate {
         if controllersNeedConfirmation.count == 1 {
             Task {
                 let response = await controllersNeedConfirmation[0].confirmCloseAsync(
-                    messageText: "Quit Ghostty?",
-                    informativeText: "The terminal still has a running process. If you quit, the process will be killed.",
+                    messageText: "Quit mostty?",
+                    informativeText: WorkspaceNotifier.shared.quitWarning(for: Array(controllersNeedConfirmation[0].surfaceTree))
+                        ?? "The terminal still has a running process. If you quit, the process will be killed.",
                     confirmButtonTitle: "Terminate",
                 )
 
@@ -1412,8 +1435,9 @@ extension AppDelegate {
         Task {
             for controller in controllers {
                 let response = await controller.confirmCloseAsync(
-                    messageText: "Quit Ghostty?",
-                    informativeText: "The terminal still has a running process. If you quit, the process will be killed.",
+                    messageText: "Quit mostty?",
+                    informativeText: WorkspaceNotifier.shared.quitWarning(for: Array(controller.surfaceTree))
+                        ?? "The terminal still has a running process. If you quit, the process will be killed.",
                     confirmButtonTitle: "Terminate",
                 )
 
