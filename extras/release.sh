@@ -38,7 +38,8 @@ dist="$root/release-out"
 tag="v$version"
 
 # Sparkle's tools ship with the Sparkle Swift package Xcode resolves.
-sparkle_bin="$(dirname "$(find "$HOME/Library/Developer/Xcode/DerivedData" -path '*/artifacts/sparkle/Sparkle/bin/generate_appcast' 2>/dev/null | head -1)")"
+# $SPARKLE_BIN overrides it (CI downloads them; there's no DerivedData yet).
+sparkle_bin="${SPARKLE_BIN:-$(dirname "$(find "$HOME/Library/Developer/Xcode/DerivedData" -path '*/artifacts/sparkle/Sparkle/bin/generate_appcast' 2>/dev/null | head -1)")}"
 [ -x "$sparkle_bin/generate_appcast" ] || { echo "Sparkle tools not found (build once in Xcode/zig build first)" >&2; exit 1; }
 
 if [ "$mode" != "--local" ]; then
