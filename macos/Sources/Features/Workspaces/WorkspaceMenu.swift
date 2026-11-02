@@ -25,7 +25,7 @@ final class WorkspaceMenu: NSObject, NSMenuDelegate {
 
         rebuild()
 
-        // Keep the menu (and therefore the ⌃⌘1-9 key equivalents) in sync.
+        // Keep the menu (and therefore the ⌥1-9 key equivalents) in sync.
         let manager = WorkspaceManager.shared
         manager.$items.combineLatest(manager.$sidebarVisible)
             .receive(on: DispatchQueue.main)
@@ -66,15 +66,16 @@ final class WorkspaceMenu: NSObject, NSMenuDelegate {
 
         for item in manager.items {
             let key = item.index < 9 ? "\(item.index + 1)" : ""
-            let mi = add(item.name, #selector(gotoWorkspace(_:)), key)
+            // ⌥1–9: one-handed and unused by Ghostty on macOS (⌘1–9 is tabs).
+            let mi = add(item.name, #selector(gotoWorkspace(_:)), key, [.option])
             mi.tag = item.index
             mi.state = item.isActive ? .on : .off
         }
 
-        // Keep ⌃⌘1-9 working even before the items are populated.
+        // Keep ⌥1-9 working even before the items are populated.
         if manager.items.isEmpty {
             for i in 0..<9 {
-                let mi = add("Workspace \(i + 1)", #selector(gotoWorkspace(_:)), "\(i + 1)")
+                let mi = add("Workspace \(i + 1)", #selector(gotoWorkspace(_:)), "\(i + 1)", [.option])
                 mi.tag = i
                 mi.isHidden = true
                 mi.allowsKeyEquivalentWhenHidden = true

@@ -16,7 +16,7 @@ running in them (Claude Code + Remote Control, servers, etc.) keeps running.
 | ⌃⌘N | New workspace for a folder (named after the git repo) |
 | ⌃⇧⌘N | New empty workspace |
 | ⌃⌘R | Rename workspace (or double-click it) |
-| ⌃⌘1–9 | Go to workspace N |
+| ⌥1–9 | Go to workspace N |
 | ⌃⌘J / ⌃⌘K | Next / previous workspace |
 | ⌃⌘S | Show / hide sidebar |
 | ⌃⌘U | Jump to latest notification |

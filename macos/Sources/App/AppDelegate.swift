@@ -621,6 +621,10 @@ class AppDelegate: NSObject,
 
     /// This handles events from the NSEvent.addLocalEventMonitor. We use this so we can get
     /// events without any terminal windows open.
+    /// mostty: virtual key codes of the 1–9 keys on the number row
+    /// (kVK_ANSI_1 … kVK_ANSI_9), in order.
+    private static let mosttyDigitKeyCodes: [UInt16] = [18, 19, 20, 21, 23, 22, 26, 28, 25]
+
     private func localEventHandler(_ event: NSEvent) -> NSEvent? {
         return switch event.type {
         case .keyDown:
@@ -632,6 +636,19 @@ class AppDelegate: NSObject,
     }
 
     private func localEventKeyDown(_ event: NSEvent) -> NSEvent? {
+        // mostty: ⌥1–9 switches workspaces. Handled here, by physical key,
+        // before the terminal sees it: menu key equivalents don't reliably
+        // match Option shortcuts (Option changes the typed character, and
+        // with macos-option-as-alt the event never reaches the menu).
+        if event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .option,
+           NSApp.keyWindow?.windowController is TerminalController,
+           let index = Self.mosttyDigitKeyCodes.firstIndex(of: event.keyCode) {
+            if !event.isARepeat {
+                MainActor.assumeIsolated { WorkspaceManager.shared.activate(index: index) }
+            }
+            return nil
+        }
+
         // If the tab overview is visible and escape is pressed, close it.
         // This can't POSSIBLY be right and is probably a FirstResponder problem
         // that we should handle elsewhere in our program. But this works and it
