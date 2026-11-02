@@ -3,17 +3,16 @@ import Cocoa
 
 extension UpdateDriver: SPUUpdaterDelegate {
     func feedURLString(for updater: SPUUpdater) -> String? {
-        guard let appDelegate = NSApplication.shared.delegate as? AppDelegate else {
-            return nil
+        // mostty: updates come from mostty's own GitHub releases. Each release
+        // publishes an appcast.xml (see extras/release.sh); "latest" always
+        // redirects to the newest one. Ghostty's update channels don't apply.
+        //
+        // For testing a release locally:
+        //   defaults write com.mostty.app MosttyUpdateFeedURL http://localhost:8000/appcast.xml
+        if let override = UserDefaults.standard.string(forKey: "MosttyUpdateFeedURL"), !override.isEmpty {
+            return override
         }
-
-        // Sparkle supports a native concept of "channels" but it requires that
-        // you share a single appcast file. We don't want to do that so we
-        // do this instead.
-        switch appDelegate.ghostty.config.autoUpdateChannel {
-        case .tip: return "https://tip.files.ghostty.org/appcast.xml"
-        case .stable: return "https://release.files.ghostty.org/appcast.xml"
-        }
+        return "https://github.com/martyvasquez/mostty/releases/latest/download/appcast.xml"
     }
 
     /// Called when an update is scheduled to install silently,

@@ -212,6 +212,15 @@ class AppDelegate: NSObject,
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // mostty: builds before Sparkle was enabled saved "automatic checks
+        // off" in user defaults, which would override Info.plist forever.
+        // Clear it once so the default (check daily) applies.
+        if !UserDefaults.standard.bool(forKey: "MosttySparkleDefaultsMigrated") {
+            UserDefaults.standard.removeObject(forKey: "SUEnableAutomaticChecks")
+            UserDefaults.standard.removeObject(forKey: "SUAutomaticallyUpdate")
+            UserDefaults.standard.set(true, forKey: "MosttySparkleDefaultsMigrated")
+        }
+
         // System settings overrides
         UserDefaults.ghostty.register(defaults: [
             // Disable this so that repeated key events make it through to our terminal views.
@@ -231,13 +240,11 @@ class AppDelegate: NSObject,
 
         // mostty: workspaces + notifications
         WorkspaceMenu.shared.install()
-        menuCheckForUpdates?.isHidden = true
         WorkspaceNotifier.shared.start()
 
-        // mostty: The updater is intentionally disabled. Sparkle would replace
-        // this fork with an official Ghostty release. Update by pulling
-        // upstream and rebuilding (see MOSTTY.md).
-        // updateController.startUpdater()
+        // Start our update checker. mostty: the feed is mostty's own GitHub
+        // releases (see UpdateDelegate), never Ghostty's.
+        updateController.startUpdater()
 
         // Register our service provider. This must happen after everything is initialized.
         NSApp.servicesProvider = ServiceProvider()
@@ -1051,8 +1058,7 @@ class AppDelegate: NSObject,
     }
 
     @IBAction func checkForUpdates(_ sender: Any?) {
-        // mostty: updates come from rebuilding the fork, never from Sparkle.
-        return
+        updateController.checkForUpdates()
         // UpdateSimulator.happyPath.simulate(with: updateViewModel)
     }
 

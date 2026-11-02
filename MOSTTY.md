@@ -95,13 +95,43 @@ Change the sound (any name from /System/Library/Sounds, or `none`):
   merges and shell integration keep working.
 - Dock icon defaults to Ghostty's "retro" style (set `macos-icon` to override).
 
-## Build / update
+## Updates (Sparkle)
+
+mostty updates itself from this repo's GitHub releases. It checks once a day
+(and via mostty → Check for Updates…), shows an "Update Available" pill, and
+installs on click or on quit. Set `auto-update = off|check|download` in the
+config to change that.
+
+Updates are signed with an EdDSA key stored in the login keychain under the
+account `mostty` (public key: `SUPublicEDKey` in `macos/Ghostty-Info.plist`).
+**Back it up** — without it, existing installs can't verify new releases:
+
+    <sparkle bin>/generate_keys --account mostty -x mostty-sparkle-key.txt
+
+### Publishing a release
+
+    extras/release.sh 0.2.0
+
+From a clean, pushed `main`, this builds the app, stamps the version
+(build number = commit count), re-signs it, zips it, writes a signed
+`appcast.xml` and creates GitHub release `v0.2.0` with both. Installed apps
+read `releases/latest/download/appcast.xml`.
+
+To try a release locally first:
+
+    MOSTTY_BUILD=2 extras/release.sh 0.0.2 --local
+    (cd release-out/archives && python3 -m http.server 8000)
+    defaults write com.mostty.app MosttyUpdateFeedURL http://localhost:8000/appcast.xml
+    # … Check for Updates… …
+    defaults delete com.mostty.app MosttyUpdateFeedURL
+
+## Build from source
 
 Needs Xcode 26+ (with Metal Toolchain) and Zig 0.17.
 
     git pull --rebase upstream main   # upstream = ghostty-org/ghostty
     zig build -Doptimize=ReleaseFast
-    open zig-out/mostty.app           # or copy it to /Applications
+    open zig-out/mostty.app
 
 The bundle id is `com.mostty.app` so it runs side by side with Ghostty and
-shares your Ghostty config file. Sparkle auto-update is disabled.
+shares your Ghostty config file.
