@@ -21,7 +21,12 @@ running in them (Claude Code + Remote Control, servers, etc.) keeps running.
 | ⌃⌘S | Show / hide sidebar |
 | ⌃⌘U | Jump to latest notification |
 
-- New tabs in a workspace with a folder open in that folder.
+- New tabs in a workspace with a folder open in that folder (or stay in the
+  current directory if it's inside the project).
+- Opening a folder with mostty (Portal and other launchers, `open -a mostty
+  <dir>`, Finder, dropping on the Dock icon) opens a new tab in the workspace
+  whose project folder is, or contains, that folder. Otherwise it creates a
+  new workspace for it.
 - Right-click a workspace to rename, set/change its folder, show it in
   Finder, reorder, or close it.
 - Workspaces, tabs and splits are restored when you reopen mostty (unless

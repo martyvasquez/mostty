@@ -467,10 +467,13 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
             return nil
         }
 
-        // mostty: new tabs in a workspace with a project folder open there.
+        // mostty: new tabs in a workspace with a project folder open there,
+        // unless they're already headed somewhere inside the project (e.g. a
+        // subfolder opened from a launcher, or the current tab's directory).
         var baseConfig = baseConfig
         if let folder = WorkspaceManager.shared.folder(for: parentController.workspaceID),
-           FileManager.default.fileExists(atPath: folder) {
+           FileManager.default.fileExists(atPath: folder),
+           !WorkspaceManager.isPath(baseConfig?.workingDirectory, inside: folder) {
             var config = baseConfig ?? Ghostty.SurfaceConfiguration()
             config.workingDirectory = folder
             baseConfig = config

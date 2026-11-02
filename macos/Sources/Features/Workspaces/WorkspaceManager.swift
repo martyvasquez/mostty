@@ -341,6 +341,68 @@ final class WorkspaceManager: ObservableObject {
         }
     }
 
+    // MARK: Opening folders (Portal, `open -a`, Finder, Dock)
+
+    /// Open a folder: as a new tab in the workspace whose project folder is
+    /// (or contains) it, otherwise as a new workspace for it.
+    /// Folder opens waiting for launch to settle. While non-zero, Ghostty's
+    /// default first window is skipped (the folder brings its own).
+    private(set) var pendingFolderOpens = 0
+
+    func openFolder(_ path: String, waitForRestore: Bool) {
+        if waitForRestore {
+            // On a cold launch, wait for window restoration so we find the
+            // restored workspace instead of creating a duplicate.
+            pendingFolderOpens += 1
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                self.pendingFolderOpens -= 1
+                self.openFolder(path, waitForRestore: false)
+            }
+            return
+        }
+
+        guard let ghostty = (NSApp.delegate as? AppDelegate)?.ghostty else { return }
+        let target = Self.normalize(path)
+
+        // The deepest workspace folder that is, or contains, the target.
+        let match = groups()
+            .compactMap { g -> (group: Group, folder: String)? in
+                guard let folder = folders[g.id.uuidString] else { return nil }
+                let f = Self.normalize(folder)
+                return Self.isPath(target, inside: f) ? (g, f) : nil
+            }
+            .max { $0.folder.count < $1.folder.count }
+
+        var config = Ghostty.SurfaceConfiguration()
+        config.workingDirectory = path
+
+        if let match, let anyWindow = match.group.controllers.first?.window {
+            let parent = anyWindow.tabGroup?.selectedWindow ?? anyWindow
+            if let current = activeWindow, current !== parent,
+               !current.styleMask.contains(.fullScreen), !parent.styleMask.contains(.fullScreen) {
+                parent.setFrame(current.frame, display: true)
+            }
+            _ = TerminalController.newTab(ghostty, from: parent, withBaseConfig: config)
+        } else {
+            create(name: Self.projectName(for: URL(fileURLWithPath: path)), folder: path)
+        }
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    /// Standardized absolute path with symlinks resolved and no trailing slash.
+    static func normalize(_ path: String) -> String {
+        let p = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
+            .standardizedFileURL.resolvingSymlinksInPath().path
+        return p.count > 1 && p.hasSuffix("/") ? String(p.dropLast()) : p
+    }
+
+    /// Whether `path` is `folder` or somewhere inside it.
+    static func isPath(_ path: String?, inside folder: String) -> Bool {
+        guard let path, !path.isEmpty else { return false }
+        let p = normalize(path), f = normalize(folder)
+        return p == f || p.hasPrefix(f == "/" ? "/" : f + "/")
+    }
+
     /// A workspace name for a folder: the git repository's name if the folder
     /// is inside one, otherwise the folder's own name.
     static func projectName(for url: URL) -> String {

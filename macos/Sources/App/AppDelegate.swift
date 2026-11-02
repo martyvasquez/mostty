@@ -380,7 +380,9 @@ class AppDelegate: NSObject,
             // is possible to have other windows in a few scenarios:
             //   - if we're opening a URL since `application(_:openFile:)` is called before this.
             //   - if we're restoring from persisted state
-            if TerminalController.all.isEmpty && derivedConfig.initialWindow {
+            // mostty: a folder being opened at launch makes its own window.
+            let folderPending = MainActor.assumeIsolated { WorkspaceManager.shared.pendingFolderOpens > 0 }
+            if TerminalController.all.isEmpty && derivedConfig.initialWindow && !folderPending {
                 undoManager.disableUndoRegistration()
                 _ = TerminalController.newWindow(ghostty)
                 undoManager.enableUndoRegistration()
@@ -507,9 +509,15 @@ class AppDelegate: NSObject,
         var config = Ghostty.SurfaceConfiguration()
 
         if isDirectory.boolValue {
-            // When opening a directory, check the configuration to decide
-            // whether to open in a new tab or new window.
-            config.workingDirectory = filename
+            // mostty: folders open in the workspace for that project (as a new
+            // tab), or as a new workspace if there isn't one yet. This is what
+            // launchers like Portal, `open -a mostty <dir>` and Finder use.
+            let launchedRecently = applicationLaunchTime == 0 ||
+                ProcessInfo.processInfo.systemUptime - applicationLaunchTime < 3
+            MainActor.assumeIsolated {
+                WorkspaceManager.shared.openFolder(filename, waitForRestore: launchedRecently)
+            }
+            return true
         } else {
             // Unconditionally require confirmation in the file execution case.
             // In the future I have ideas about making this more fine-grained if
