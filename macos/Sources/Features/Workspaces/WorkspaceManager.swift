@@ -6,13 +6,18 @@ import SwiftUI
 ///
 /// A workspace is a Ghostty window (a native tab group) that has a user-given
 /// name. Each workspace keeps its own tabs (and splits), exactly like a normal
-/// Ghostty window. The sidebar lists all workspaces and switching to one brings
-/// its window forward at the same frame as the current one, so the workspaces
-/// feel like "pages" of a single window.
+/// Ghostty window. The sidebar lists all workspaces.
 ///
-/// Nothing here touches the terminal engine or the PTYs: windows are never
-/// hidden or suspended, so long-running processes (e.g. Claude Code with
-/// Remote Control) in background workspaces keep running untouched.
+/// mostty is a single window: only the active workspace's window is shown.
+/// The others stay open at the same frame, directly behind it, but are made
+/// invisible (alpha 0), click-through, and left out of the Window menu and
+/// ⌘` cycling. They are not ordered out, because ordering out a tabbed window
+/// pulls it out of its tab group.
+///
+/// Nothing here touches the terminal engine or the PTYs: background
+/// workspaces are never suspended, so long-running processes (e.g. Claude
+/// Code with Remote Control) keep running untouched. macOS just stops drawing
+/// them, like any covered window.
 @MainActor
 final class WorkspaceManager: ObservableObject {
     static let shared = WorkspaceManager()
@@ -33,6 +38,12 @@ final class WorkspaceManager: ObservableObject {
 
     /// The workspaces as displayed in the sidebar, in order.
     @Published private(set) var items: [Item] = []
+
+    /// The workspace whose window is shown.
+    private(set) var activeID: UUID?
+
+    /// The frame of the (single) visible window, while not fullscreen.
+    private var mainFrame: NSRect?
 
     /// Whether the sidebar is visible in terminal windows.
     @Published var sidebarVisible: Bool {
@@ -75,8 +86,24 @@ final class WorkspaceManager: ObservableObject {
         }
 
         let center = NotificationCenter.default
+
+        // Any terminal window becoming key (sidebar, notification click, new
+        // window, ⌘`, AppKit picking a window after another closed, ...)
+        // makes its workspace the visible one.
+        center.publisher(for: NSWindow.didBecomeKeyNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { n in
+                Task { @MainActor in
+                    let m = WorkspaceManager.shared
+                    if let c = (n.object as? NSWindow)?.windowController as? TerminalController {
+                        m.activeID = c.workspaceID
+                    }
+                    m.refresh()
+                }
+            }
+            .store(in: &cancellables)
+
         for name in [
-            NSWindow.didBecomeKeyNotification,
             NSWindow.willCloseNotification,
             NSWindow.didBecomeMainNotification,
         ] {
@@ -147,8 +174,7 @@ final class WorkspaceManager: ObservableObject {
         if draggingID != nil && NSEvent.pressedMouseButtons == 0 { draggingID = nil }
 
         let groups = groups()
-        let keyController = (NSApp.keyWindow ?? NSApp.mainWindow)?.windowController as? TerminalController
-        let activeID = keyController?.workspaceID ?? TerminalController.lastMainWorkspaceID
+        enforceSingleWindow(groups)
 
         let notifier = WorkspaceNotifier.shared
         let newItems = groups.enumerated().map { (i, g) in
@@ -194,6 +220,65 @@ final class WorkspaceManager: ObservableObject {
         }
     }
 
+    // MARK: Single window
+
+    /// Show the active workspace's window and hide every other one.
+    private func enforceSingleWindow(_ groups: [Group]) {
+        // A hidden window that became key (e.g. a tab dragged out into its
+        // own window, which only gets its own workspace ID afterwards) wins.
+        if let key = NSApp.keyWindow?.windowController as? TerminalController,
+           let window = key.window, window.alphaValue == 0 {
+            activeID = key.workspaceID
+        }
+        if activeID == nil || !groups.contains(where: { $0.id == activeID }) {
+            let last = TerminalController.lastMainWorkspaceID
+            activeID = groups.contains { $0.id == last } ? last : groups.first?.id
+        }
+        guard let active = groups.first(where: { $0.id == activeID }) else { return }
+
+        let shown = active.controllers.compactMap(\.window)
+        shown.forEach { setHidden($0, false) }
+        if let visible = shown.first.map({ $0.tabGroup?.selectedWindow ?? $0 }),
+           !visible.styleMask.contains(.fullScreen), !visible.inLiveResize {
+            mainFrame = visible.frame
+        }
+
+        for group in groups where group.id != active.id {
+            let windows = group.controllers.compactMap(\.window)
+            windows.forEach { setHidden($0, true) }
+
+            // Keep hidden workspaces at the visible frame so switching is
+            // instant (no resize) and macOS sees them as covered (no drawing).
+            if let mainFrame,
+               let selected = windows.first.map({ $0.tabGroup?.selectedWindow ?? $0 }),
+               !selected.styleMask.contains(.fullScreen),
+               selected.frame != mainFrame {
+                selected.setFrame(mainFrame, display: false)
+            }
+        }
+    }
+
+    private func setHidden(_ window: NSWindow, _ hidden: Bool) {
+        let alpha: CGFloat = hidden ? 0 : 1
+        if window.alphaValue != alpha { window.alphaValue = alpha }
+        if window.ignoresMouseEvents != hidden { window.ignoresMouseEvents = hidden }
+        if window.isExcludedFromWindowsMenu != hidden { window.isExcludedFromWindowsMenu = hidden }
+        if window.collectionBehavior.contains(.ignoresCycle) != hidden {
+            if hidden {
+                window.collectionBehavior.insert(.ignoresCycle)
+            } else {
+                window.collectionBehavior.remove(.ignoresCycle)
+            }
+        }
+    }
+
+    /// The frame a newly created workspace window should take: the visible
+    /// workspace's, so it replaces it in place.
+    var frameForNewWorkspace: NSRect? {
+        if let w = activeWindow, w.alphaValue > 0, !w.styleMask.contains(.fullScreen) { return w.frame }
+        return mainFrame
+    }
+
     func name(for id: UUID) -> String {
         if let n = names[id.uuidString], !n.isEmpty { return n }
         return "Workspace"
@@ -218,22 +303,30 @@ final class WorkspaceManager: ObservableObject {
 
     private var activeWindow: NSWindow? {
         let w = NSApp.keyWindow ?? NSApp.mainWindow
-        return (w?.windowController is TerminalController) ? w : TerminalController.preferredParent?.window
+        if w?.windowController is TerminalController { return w }
+        // Not key (e.g. opened from a launcher): the visible workspace window,
+        // never a hidden one (sheets attached to it would be invisible).
+        if let activeID,
+           let window = TerminalController.all.first(where: { $0.workspaceID == activeID })?.window {
+            return window.tabGroup?.selectedWindow ?? window
+        }
+        return TerminalController.preferredParent?.window
     }
 
-    /// Bring a workspace's window forward, matching the current window frame.
+    /// Show a workspace in place of the current one.
     func activate(_ id: UUID) {
         guard let group = groups().first(where: { $0.id == id }),
               let anyWindow = group.controllers.first?.window else { return }
         let target = anyWindow.tabGroup?.selectedWindow ?? anyWindow
 
-        if let current = activeWindow, current !== target,
-           !current.styleMask.contains(.fullScreen),
+        if let frame = frameForNewWorkspace,
            !target.styleMask.contains(.fullScreen),
-           current.screen == target.screen || target.screen == nil {
-            target.setFrame(current.frame, display: true)
+           target.frame != frame {
+            target.setFrame(frame, display: true)
         }
 
+        activeID = id
+        group.controllers.compactMap(\.window).forEach { setHidden($0, false) }
         target.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         refresh()
@@ -259,11 +352,10 @@ final class WorkspaceManager: ObservableObject {
         }
     }
 
-    /// Create a new workspace (a new window) stacked exactly on top of the
-    /// current one. Without a name, it starts renaming it.
+    /// Create a new workspace. Its window takes the place of the current one
+    /// (see TerminalController.newWindow). Without a name, it starts renaming it.
     func create(name: String? = nil, folder: String? = nil) {
         guard let ghostty = (NSApp.delegate as? AppDelegate)?.ghostty else { return }
-        let frame = activeWindow.flatMap { $0.styleMask.contains(.fullScreen) ? nil : $0.frame }
 
         let id = UUID()
         setName(name ?? nextDefaultName(), for: id)
@@ -280,13 +372,7 @@ final class WorkspaceManager: ObservableObject {
         let c = TerminalController.newWindow(ghostty, withBaseConfig: config)
         TerminalController.pendingWorkspaceID = nil
         c.workspaceID = id
-
-        if let frame {
-            // newWindow cascades on a later runloop tick; place ours after that.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                c.window?.setFrame(frame, display: true)
-            }
-        }
+        activeID = id
 
         refresh()
         if name == nil {
@@ -378,10 +464,7 @@ final class WorkspaceManager: ObservableObject {
 
         if let match, let anyWindow = match.group.controllers.first?.window {
             let parent = anyWindow.tabGroup?.selectedWindow ?? anyWindow
-            if let current = activeWindow, current !== parent,
-               !current.styleMask.contains(.fullScreen), !parent.styleMask.contains(.fullScreen) {
-                parent.setFrame(current.frame, display: true)
-            }
+            activate(match.group.id)
             _ = TerminalController.newTab(ghostty, from: parent, withBaseConfig: config)
         } else {
             create(name: Self.projectName(for: URL(fileURLWithPath: path)), folder: path)
@@ -430,6 +513,8 @@ final class WorkspaceManager: ObservableObject {
     /// through the normal close path so running processes trigger confirmation.
     func close(_ id: UUID) {
         guard let group = groups().first(where: { $0.id == id }) else { return }
+        // Show it first so a close confirmation isn't attached to a hidden window.
+        if id != activeID { activate(id) }
         group.controllers.first?.closeWindow(nil)
     }
 

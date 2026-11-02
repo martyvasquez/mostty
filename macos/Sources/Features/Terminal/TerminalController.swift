@@ -310,6 +310,12 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         }
 
         c.scheduleInitialPresentation {
+            // mostty: a new window is a new workspace and takes the place of
+            // the visible one (same frame, set in the same runloop tick so it
+            // never shows up anywhere else). The old one is hidden by the
+            // WorkspaceManager once this window becomes key.
+            let workspaceFrame = WorkspaceManager.shared.frameForNewWorkspace
+
             // We're dispatching this async because in some cases AppKit will tab this window,
             // although we have a check in `windowDidLoad` and it works in most cases, but not for AppIntent
             //
@@ -318,8 +324,17 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
             // - Creating a window via `New Ghostty Window Here` service.
             c.showWindowSafely(self)
 
-            // Only cascade if we aren't fullscreen.
-            if let window = c.window {
+            if let window = c.window, let workspaceFrame,
+               !window.styleMask.contains(.fullScreen) {
+                window.setFrame(workspaceFrame, display: true)
+                // Cocoa may still reposition a new window on the next tick.
+                DispatchQueue.main.async {
+                    if window.frame != workspaceFrame, !window.styleMask.contains(.fullScreen) {
+                        window.setFrame(workspaceFrame, display: true)
+                    }
+                }
+            } else if let window = c.window {
+                // Only cascade if we aren't fullscreen.
                 if !window.styleMask.contains(.fullScreen) {
                     let hasFixedPos = c.derivedConfig.windowPositionX != nil && c.derivedConfig.windowPositionY != nil
                     // We're dispatching this async because otherwise the lastCascadePoint doesn't

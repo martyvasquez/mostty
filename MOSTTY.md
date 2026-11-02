@@ -7,9 +7,15 @@ all changes are in the macOS Swift app.
 
 A workspace is a named Ghostty window with its own tabs and splits, usually
 tied to a project folder. The sidebar runs the full height of the window; tabs
-sit to its right. Clicking a workspace brings it forward at the same size and
-position. Background workspaces are never suspended or hidden, so anything
-running in them (Claude Code + Remote Control, servers, etc.) keeps running.
+sit to its right.
+
+mostty is one window: workspaces replace windows. Only the active workspace is
+shown; switching (sidebar, shortcuts, a notification click) swaps it in place,
+and a new workspace (⌃⌘N, ⌘N, a launcher opening a folder) takes the place of
+the current one instead of opening a separate window. Background workspaces are
+never suspended, so anything running in them (Claude Code + Remote Control,
+servers, etc.) keeps running; macOS just doesn't draw them. Closing the last
+tab of a workspace shows another one.
 
 | Shortcut | Action |
 | --- | --- |
