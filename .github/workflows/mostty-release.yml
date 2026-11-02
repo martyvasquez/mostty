@@ -1,0 +1,60 @@
+# mostty: publish a Sparkle release for every push to main.
+#
+# Builds with extras/release.sh (version 0.1.<commit count>), signs the
+# appcast with the SPARKLE_ED_KEY secret and creates the GitHub release that
+# installed copies of mostty update from.
+name: mostty release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Only the newest push releases; an older run still building is cancelled.
+concurrency:
+  group: mostty-release
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    if: github.repository == 'martyvasquez/mostty'
+    runs-on: macos-26
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Full history: the build number is the commit count.
+          fetch-depth: 0
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Install Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
+
+      - name: Install gettext
+        run: brew install gettext
+
+      - name: Versions
+        run: |
+          xcodebuild -version
+          zig version
+
+      - name: Build and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SPARKLE_ED_KEY: ${{ secrets.SPARKLE_ED_KEY }}
+        run: |
+          if [ -z "$SPARKLE_ED_KEY" ]; then
+            echo "::error::SPARKLE_ED_KEY secret is not set"
+            exit 1
+          fi
+          extras/release.sh auto

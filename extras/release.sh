@@ -3,6 +3,7 @@
 # pick up through Sparkle.
 #
 #   extras/release.sh 0.2.0            # build + publish GitHub release v0.2.0
+#   extras/release.sh auto             # version 0.1.<build> (what CI uses)
 #   extras/release.sh 0.2.0 --local    # build into release-out/ only (for testing)
 #
 # What it does:
@@ -11,7 +12,8 @@
 #      where <build> is the commit count on main (always increasing)
 #   3. re-signs the app (ad-hoc, keeping entitlements / hardened runtime)
 #   4. zips it and writes release-out/appcast.xml, signed with the "mostty" EdDSA
-#      key in your login keychain (created with: generate_keys --account mostty)
+#      key in your login keychain (created with: generate_keys --account mostty),
+#      or with the key in $SPARKLE_ED_KEY when set (CI)
 #   5. creates GitHub release v<version> with the zip + appcast.xml
 #
 # Installed apps read https://github.com/martyvasquez/mostty/releases/latest/download/appcast.xml
@@ -22,6 +24,9 @@ KEY_ACCOUNT="mostty"
 
 version="${1:-}"
 mode="${2:-publish}"
+# MOSTTY_BUILD overrides the build number (only useful for local test builds).
+build="${MOSTTY_BUILD:-$(git rev-list --count HEAD)}"
+[ "$version" = "auto" ] && version="0.1.$build"
 if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   echo "usage: $0 <x.y.z> [--local]" >&2
   exit 1
@@ -46,8 +51,6 @@ if [ "$mode" != "--local" ]; then
   fi
 fi
 
-# MOSTTY_BUILD overrides the build number (only useful for local test builds).
-build="${MOSTTY_BUILD:-$(git rev-list --count HEAD)}"
 echo "==> mostty $version (build $build)"
 
 echo "==> Building"
@@ -77,8 +80,16 @@ else
 fi
 
 echo "==> Writing appcast"
+key_args=(--account "$KEY_ACCOUNT")
+if [ -n "${SPARKLE_ED_KEY:-}" ]; then
+  key_file="$(mktemp)"
+  trap 'rm -f "$key_file"' EXIT
+  chmod 600 "$key_file"
+  printf '%s' "$SPARKLE_ED_KEY" > "$key_file"
+  key_args=(--ed-key-file "$key_file")
+fi
 "$sparkle_bin/generate_appcast" \
-  --account "$KEY_ACCOUNT" \
+  "${key_args[@]}" \
   --download-url-prefix "$prefix" \
   --link "https://github.com/$REPO" \
   --maximum-deltas 0 \
