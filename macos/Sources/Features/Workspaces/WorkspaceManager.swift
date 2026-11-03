@@ -103,6 +103,26 @@ final class WorkspaceManager: ObservableObject {
             }
             .store(in: &cancellables)
 
+        // A window finished closing: pick the next visible workspace now
+        // rather than on the next timer tick.
+        center.publisher(for: NSWindow.willCloseNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { _ in
+                DispatchQueue.main.async { WorkspaceManager.shared.refresh() }
+            }
+            .store(in: &cancellables)
+
+        // Restoring a minimized window (Dock) shows its workspace.
+        center.publisher(for: NSWindow.didDeminiaturizeNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { n in
+                Task { @MainActor in
+                    guard let c = (n.object as? NSWindow)?.windowController as? TerminalController else { return }
+                    WorkspaceManager.shared.activate(c.workspaceID)
+                }
+            }
+            .store(in: &cancellables)
+
         for name in [
             NSWindow.willCloseNotification,
             NSWindow.didBecomeMainNotification,
@@ -230,7 +250,9 @@ final class WorkspaceManager: ObservableObject {
            let window = key.window, window.alphaValue == 0 {
             activeID = key.workspaceID
         }
+        var activeClosed = false
         if activeID == nil || !groups.contains(where: { $0.id == activeID }) {
+            activeClosed = activeID != nil
             let last = TerminalController.lastMainWorkspaceID
             activeID = groups.contains { $0.id == last } ? last : groups.first?.id
         }
@@ -238,6 +260,24 @@ final class WorkspaceManager: ObservableObject {
 
         let shown = active.controllers.compactMap(\.window)
         shown.forEach { setHidden($0, false) }
+
+        // A new workspace whose window isn't on screen yet (it is shown on
+        // the next runloop tick): keep the current one up, and don't take
+        // the new window's default frame as the main frame, until it is.
+        // Otherwise the new window would open at that default frame (moving
+        // and resizing) and the others would be resized to it.
+        if let pending = shown.first.map({ $0.tabGroup?.selectedWindow ?? $0 }),
+           !pending.isVisible, !pending.isMiniaturized {
+            return
+        }
+
+        // The visible workspace was closed: background windows can't take
+        // focus by themselves, so give it to the one now shown.
+        if activeClosed, NSApp.isActive, NSApp.keyWindow == nil,
+           let target = shown.first.map({ $0.tabGroup?.selectedWindow ?? $0 }),
+           !target.isMiniaturized {
+            DispatchQueue.main.async { target.makeKeyAndOrderFront(nil) }
+        }
         if let visible = shown.first.map({ $0.tabGroup?.selectedWindow ?? $0 }),
            !visible.styleMask.contains(.fullScreen), !visible.inLiveResize {
             mainFrame = visible.frame
@@ -259,6 +299,9 @@ final class WorkspaceManager: ObservableObject {
     }
 
     private func setHidden(_ window: NSWindow, _ hidden: Bool) {
+        if let w = window as? TerminalWindow, w.mosttyHiddenWorkspace != hidden {
+            w.mosttyHiddenWorkspace = hidden
+        }
         let alpha: CGFloat = hidden ? 0 : 1
         if window.alphaValue != alpha { window.alphaValue = alpha }
         if window.ignoresMouseEvents != hidden { window.ignoresMouseEvents = hidden }
@@ -330,6 +373,18 @@ final class WorkspaceManager: ObservableObject {
         target.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         refresh()
+    }
+
+    /// The visible workspace's window is minimized: restore it. For a click
+    /// on the Dock icon (background windows count as "visible" to AppKit, so
+    /// it wouldn't restore it by itself).
+    func restoreIfMinimized() -> Bool {
+        guard let activeID,
+              let window = TerminalController.all.first(where: { $0.workspaceID == activeID })?.window else { return false }
+        let target = window.tabGroup?.selectedWindow ?? window
+        guard target.isMiniaturized else { return false }
+        target.deminiaturize(nil)
+        return true
     }
 
     func activate(index: Int) {

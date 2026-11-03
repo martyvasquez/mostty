@@ -177,8 +177,16 @@ class TerminalWindow: NSWindow {
 
     // Both of these must be true for windows without decorations to be able to
     // still become key/main and receive events.
-    override var canBecomeKey: Bool { return true }
-    override var canBecomeMain: Bool { return true }
+    //
+    // mostty: except a hidden (background) workspace's window. Otherwise
+    // AppKit hands focus to one when the visible window is minimized or
+    // closed, which would show it instead of minimizing the app.
+    override var canBecomeKey: Bool { return !mosttyHiddenWorkspace }
+    override var canBecomeMain: Bool { return !mosttyHiddenWorkspace }
+
+    /// mostty: set by WorkspaceManager while this window's workspace isn't
+    /// the visible one.
+    var mosttyHiddenWorkspace = false
 
     override func sendEvent(_ event: NSEvent) {
         if tabTitleEditor.handleMouseDown(event) {

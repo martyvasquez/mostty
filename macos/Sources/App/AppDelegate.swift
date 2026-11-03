@@ -449,6 +449,9 @@ class AppDelegate: NSObject,
     /// This is called when the application is already open and someone double-clicks the icon
     /// or clicks the dock icon.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        // mostty: clicking the Dock icon restores the minimized window.
+        if MainActor.assumeIsolated({ WorkspaceManager.shared.restoreIfMinimized() }) { return false }
+
         // If we have visible windows then we allow macOS to do its default behavior
         // of focusing one of them.
         guard !flag else { return true }
