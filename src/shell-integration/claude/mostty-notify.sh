@@ -108,14 +108,30 @@ esac
 # the nearest ancestor process (the claude process itself).
 write_tty() { { printf '%s' "$out" > "$1"; } 2>/dev/null; }
 
-write_tty /dev/tty && exit 0
-pid=$PPID
-for _ in 1 2 3 4 5 6; do
-  [ -n "$pid" ] && [ "$pid" -gt 1 ] 2>/dev/null || break
-  tty="$(ps -o tty= -p "$pid" 2>/dev/null | tr -d ' ')"
-  if [ -n "$tty" ] && [ "$tty" != "??" ]; then
-    write_tty "/dev/$tty" && exit 0
-  fi
-  pid="$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')"
-done
+send() {
+  write_tty /dev/tty && return 0
+  local pid=$PPID tty
+  for _ in 1 2 3 4 5 6; do
+    [ -n "$pid" ] && [ "$pid" -gt 1 ] 2>/dev/null || break
+    tty="$(ps -o tty= -p "$pid" 2>/dev/null | tr -d ' ')"
+    if [ -n "$tty" ] && [ "$tty" != "??" ]; then
+      write_tty "/dev/$tty" && return 0
+    fi
+    pid="$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')"
+  done
+  return 0
+}
+
+# SessionStart fires while Claude is drawing its first screen (or replaying a
+# resumed transcript). That output is large, so the kernel splits it into
+# several writes, and our bytes can land between them, even in the middle of
+# a multi-byte character, which breaks the layout ("──" leftovers, the input
+# box one line off). Nothing needs the session id right away, so send it a
+# moment later from a detached background job and return immediately.
+if [ "$event" = "SessionStart" ]; then
+  ( sleep 2; send ) </dev/null >/dev/null 2>&1 &
+  exit 0
+fi
+
+send
 exit 0
