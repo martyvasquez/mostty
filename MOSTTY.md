@@ -21,6 +21,7 @@ tab of a workspace shows another one.
 | --- | --- |
 | ⌘N | New workspace in the current tab's directory (File > New Workspace; name it right away) |
 | ⌃⌘N | New workspace for a folder (named after the git repo) |
+| ⌘⇧T | New tab that starts Claude Code (undo / reopen closed tab stays on ⌘Z) |
 | ⌃⌘R | Rename workspace (or double-click it) |
 | ⌥1–9 | Go to workspace N |
 | ⌃⌘J / ⌃⌘K | Next / previous workspace |
@@ -102,6 +103,8 @@ Change the sound (any name from /System/Library/Sounds, or `none`):
   treated as `always`).
 - Engine: one exemption in `src/Surface.zig` so "mostty" status messages
   skip the 1-per-second notification rate limit.
+- Engine: `src/config/Config.zig` no longer binds ⌘⇧T to undo by default
+  (it's New Claude Tab; undo stays on ⌘Z).
 - Xcode project: app is `mostty.app` (bundle id `com.mostty.app`); the Swift
   module and the executable inside stay `Ghostty` / `ghostty` so upstream
   merges and shell integration keep working.

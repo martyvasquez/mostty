@@ -503,6 +503,20 @@ final class WorkspaceManager: ObservableObject {
         return url.lastPathComponent
     }
 
+    /// New tab in the active workspace (in the current tab's directory, like
+    /// ⌘T) that starts Claude Code.
+    func newClaudeTab() {
+        guard let ghostty = (NSApp.delegate as? AppDelegate)?.ghostty,
+              let parent = activeWindow else { return }
+        var config = Ghostty.SurfaceConfiguration()
+        if let pwd = (parent.windowController as? TerminalController)?.focusedSurface?.pwd {
+            config.workingDirectory = pwd
+        }
+        guard let c = TerminalController.newTab(ghostty, from: parent, withBaseConfig: config),
+              let surface = c.focusedSurface ?? Array(c.surfaceTree).first else { return }
+        WorkspaceNotifier.shared.run("claude", in: surface)
+    }
+
     /// Start renaming the active workspace.
     func renameActive() {
         guard let item = items.first(where: \.isActive) ?? items.first else { return }

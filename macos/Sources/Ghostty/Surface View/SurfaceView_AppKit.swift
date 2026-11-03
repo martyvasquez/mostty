@@ -2272,6 +2272,15 @@ extension Ghostty.SurfaceView: NSServicesMenuRequestor {
         }
     }
 
+    /// mostty: press Return. Text sent with mosttySendText arrives as a paste,
+    /// and shells don't run a pasted line by themselves (bracketed paste), so
+    /// a command typed for the user needs a separate Return.
+    func mosttySendReturn() {
+        guard let surface else { return }
+        let action = "text:\\r"
+        _ = ghostty_surface_binding_action(surface, action, UInt(action.lengthOfBytes(using: .utf8)))
+    }
+
     func readSelection(from pboard: NSPasteboard) -> Bool {
         guard let str = pboard.getOpinionatedStringContents() else { return false }
 

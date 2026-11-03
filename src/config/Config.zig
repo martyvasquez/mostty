@@ -7159,12 +7159,9 @@ pub const Keybinds = struct {
             );
 
             // Undo/redo
-            try self.set.putFlags(
-                alloc,
-                .{ .key = .{ .unicode = 't' }, .mods = .{ .super = true, .shift = true } },
-                .{ .undo = {} },
-                .{ .performable = true },
-            );
+            //
+            // mostty: ⌘⇧T is "New Claude Tab" (Workspaces menu), so it is not
+            // bound to undo here. Undo (e.g. reopen a closed tab) stays on ⌘Z.
             try self.set.putFlags(
                 alloc,
                 .{ .key = .{ .unicode = 'z' }, .mods = .{ .super = true } },

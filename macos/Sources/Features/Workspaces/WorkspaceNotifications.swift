@@ -257,25 +257,33 @@ final class WorkspaceNotifier: ObservableObject {
     }
 
     private func sendResume(_ session: ClaudeSession, to surface: Ghostty.SurfaceView, attempt: Int) {
-        // Wait until the shell is at its first prompt. Ghostty's shell
-        // integration reports the working directory there, so `pwd` becoming
-        // non-nil is the signal. Typing earlier works too (the tty buffers it)
-        // but shows the command twice. Give up waiting after ~4s.
+        var command = "claude --resume \(session.id)"
+        if !session.cwd.isEmpty {
+            let quoted = "'" + session.cwd.replacingOccurrences(of: "'", with: "'\\''") + "'"
+            command = "cd -- \(quoted) && \(command)"
+        }
+        run(command, in: surface)
+    }
+
+    /// Type a command into a new terminal's shell and run it, once the shell
+    /// is at its first prompt. Going through the shell (rather than starting
+    /// the command directly) keeps mostty's `claude` wrapper and hooks, and
+    /// leaves the shell there when the command exits.
+    func run(_ command: String, in surface: Ghostty.SurfaceView, attempt: Int = 0) {
+        // Ghostty's shell integration reports the working directory at the
+        // prompt, so `pwd` becoming non-nil is the signal. Typing earlier
+        // works too (the tty buffers it) but shows the command twice. Give up
+        // waiting after ~4s.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak surface] in
             guard let surface else { return }
             let ready = surface.surface != nil && surface.pwd != nil
             guard ready || attempt >= 40 else {
-                self.sendResume(session, to: surface, attempt: attempt + 1)
+                self.run(command, in: surface, attempt: attempt + 1)
                 return
             }
             guard surface.surface != nil else { return }
-
-            var command = "claude --resume \(session.id)"
-            if !session.cwd.isEmpty {
-                let quoted = "'" + session.cwd.replacingOccurrences(of: "'", with: "'\\''") + "'"
-                command = "cd -- \(quoted) && \(command)"
-            }
-            surface.mosttySendText(command + "\r")
+            surface.mosttySendText(command)
+            surface.mosttySendReturn()
         }
     }
 
