@@ -519,11 +519,7 @@ class AppDelegate: NSObject,
             // mostty: folders open in the workspace for that project (as a new
             // tab), or as a new workspace if there isn't one yet. This is what
             // launchers like Portal, `open -a mostty <dir>` and Finder use.
-            let launchedRecently = applicationLaunchTime == 0 ||
-                ProcessInfo.processInfo.systemUptime - applicationLaunchTime < 3
-            MainActor.assumeIsolated {
-                WorkspaceManager.shared.openFolder(filename, waitForRestore: launchedRecently)
-            }
+            openFolderInWorkspace(filename)
             return true
         } else {
             // Unconditionally require confirmation in the file execution case.
@@ -1062,6 +1058,16 @@ class AppDelegate: NSObject,
     @IBAction func checkForUpdates(_ sender: Any?) {
         updateController.checkForUpdates()
         // UpdateSimulator.happyPath.simulate(with: updateViewModel)
+    }
+
+    /// mostty: open a folder in the workspace for that project (as a new
+    /// tab), or as a new workspace if there isn't one yet.
+    func openFolderInWorkspace(_ path: String) {
+        let launchedRecently = applicationLaunchTime == 0 ||
+            ProcessInfo.processInfo.systemUptime - applicationLaunchTime < 3
+        MainActor.assumeIsolated {
+            WorkspaceManager.shared.openFolder(path, waitForRestore: launchedRecently)
+        }
     }
 
     @IBAction func newWindow(_ sender: Any?) {

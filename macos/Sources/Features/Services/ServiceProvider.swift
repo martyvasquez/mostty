@@ -4,31 +4,18 @@ import AppKit
 class ServiceProvider: NSObject {
     static private let errorNoString = NSString(string: "Could not load any text from the clipboard.")
 
-    /// The target for an open operation
-    private enum OpenTarget {
-        case tab
-        case window
-    }
-
-    @objc func openTab(
+    /// mostty: "New mostty Terminal Here". Opens a tab in the workspace for
+    /// that folder if there is one, otherwise a new workspace for it.
+    @objc func openTerminal(
         _ pasteboard: NSPasteboard,
         userData: String?,
         error: AutoreleasingUnsafeMutablePointer<NSString>
     ) {
-        openTerminal(from: pasteboard, target: .tab, error: error)
-    }
-
-    @objc func openWindow(
-        _ pasteboard: NSPasteboard,
-        userData: String?,
-        error: AutoreleasingUnsafeMutablePointer<NSString>
-    ) {
-        openTerminal(from: pasteboard, target: .window, error: error)
+        openTerminal(from: pasteboard, error: error)
     }
 
     private func openTerminal(
         from pasteboard: NSPasteboard,
-        target: OpenTarget,
         error: AutoreleasingUnsafeMutablePointer<NSString>
     ) {
         guard let delegate = NSApp.delegate as? AppDelegate else { return }
@@ -58,20 +45,7 @@ class ServiceProvider: NSObject {
         }
 
         for url in directoryURLs {
-            var config = Ghostty.SurfaceConfiguration()
-            config.workingDirectory = url.pathWithoutTrailingSlash
-
-            switch target {
-            case .window:
-                _ = TerminalController.newWindow(delegate.ghostty, withBaseConfig: config)
-
-            case .tab:
-                _ = TerminalController.newTab(
-                    delegate.ghostty,
-                    from: TerminalController.preferredParent?.window,
-                    withBaseConfig: config)
-            }
+            delegate.openFolderInWorkspace(url.pathWithoutTrailingSlash)
         }
-
     }
 }

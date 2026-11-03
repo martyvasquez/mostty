@@ -30,7 +30,8 @@ tab of a workspace shows another one.
 - New tabs in a workspace with a folder open in that folder (or stay in the
   current directory if it's inside the project).
 - Opening a folder with mostty (Portal and other launchers, `open -a mostty
-  <dir>`, Finder, dropping on the Dock icon) opens a new tab in the workspace
+  <dir>`, Finder, dropping on the Dock icon, Finder's Services >
+  New mostty Terminal Here) opens a new tab in the workspace
   whose project folder is, or contains, that folder. Otherwise it creates a
   new workspace for it.
 - Right-click a workspace to rename, set/change its folder, show it in
