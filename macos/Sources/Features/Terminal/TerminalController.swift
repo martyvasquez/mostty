@@ -322,11 +322,15 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
             // That weird tabbing behavior only happens in the following cases at the point of writing.
             // - Creating a window via the Shortcuts app for now.
             // - Creating a window via `New Ghostty Window Here` service.
+            //
+            // mostty: showWindow applies the workspace frame before ordering
+            // the window in, so it never appears at its default size first.
+            c.initialWorkspaceFrame = workspaceFrame
             c.showWindowSafely(self)
+            c.initialWorkspaceFrame = nil
 
             if let window = c.window, let workspaceFrame,
                !window.styleMask.contains(.fullScreen) {
-                window.setFrame(workspaceFrame, display: true)
                 // Cocoa may still reposition a new window on the next tick.
                 DispatchQueue.main.async {
                     if window.frame != workspaceFrame, !window.styleMask.contains(.fullScreen) {
@@ -1230,9 +1234,23 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         syncAppearance(.init(config))
     }
 
+    /// mostty: the frame a new workspace window takes when it is first shown
+    /// (the visible workspace's), set only for the duration of showWindow.
+    fileprivate var initialWorkspaceFrame: NSRect?
+
     /// Setup correct window frame before showing the window
     override func showWindow(_ sender: Any?) {
         guard let terminalWindow = window as? TerminalWindow else { return }
+
+        // mostty: replace the visible workspace in place. Set the frame before
+        // the window is ordered in so it never flashes at another size.
+        if let frame = initialWorkspaceFrame,
+           !terminalWindow.styleMask.contains(.fullScreen) {
+            terminalWindow.setFrame(frame, display: false)
+            super.showWindow(sender)
+            syncAppearance()
+            return
+        }
 
         // Set the initial window position. This must happen after the window
         // is fully set up (content view, toolbar, default size) so that
