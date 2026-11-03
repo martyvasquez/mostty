@@ -11,7 +11,7 @@ sit to its right.
 
 mostty is one window: workspaces replace windows. Only the active workspace is
 shown; switching (sidebar, shortcuts, a notification click) swaps it in place,
-and a new workspace (⌃⌘N, ⌘N, a launcher opening a folder) takes the place of
+and a new workspace (⌘N, ⌃⌘N, a launcher opening a folder) takes the place of
 the current one instead of opening a separate window. Background workspaces are
 never suspended, so anything running in them (Claude Code + Remote Control,
 servers, etc.) keeps running; macOS just doesn't draw them. Closing the last
@@ -19,8 +19,8 @@ tab of a workspace shows another one.
 
 | Shortcut | Action |
 | --- | --- |
+| ⌘N | New workspace in the current tab's directory (File > New Workspace; name it right away) |
 | ⌃⌘N | New workspace for a folder (named after the git repo) |
-| ⌃⇧⌘N | New empty workspace |
 | ⌃⌘R | Rename workspace (or double-click it) |
 | ⌥1–9 | Go to workspace N |
 | ⌃⌘J / ⌃⌘K | Next / previous workspace |

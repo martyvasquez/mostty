@@ -354,16 +354,17 @@ final class WorkspaceManager: ObservableObject {
 
     /// Create a new workspace. Its window takes the place of the current one
     /// (see TerminalController.newWindow). Without a name, it starts renaming it.
-    func create(name: String? = nil, folder: String? = nil) {
+    /// `baseConfig` carries the inherited working directory etc. for ⌘N.
+    func create(name: String? = nil, folder: String? = nil, baseConfig: Ghostty.SurfaceConfiguration? = nil) {
         guard let ghostty = (NSApp.delegate as? AppDelegate)?.ghostty else { return }
 
         let id = UUID()
         setName(name ?? nextDefaultName(), for: id)
         if let folder { setFolder(folder, for: id) }
 
-        var config: Ghostty.SurfaceConfiguration?
+        var config = baseConfig
         if let folder {
-            var c = Ghostty.SurfaceConfiguration()
+            var c = baseConfig ?? Ghostty.SurfaceConfiguration()
             c.workingDirectory = folder
             config = c
         }

@@ -50,7 +50,6 @@ final class WorkspaceMenu: NSObject, NSMenuDelegate {
         let manager = WorkspaceManager.shared
 
         _ = add("New Workspace for Folder…", #selector(newWorkspace), "n")
-        _ = add("New Empty Workspace", #selector(newEmptyWorkspace), "n", [.control, .command, .shift])
         _ = add("Set Project Folder…", #selector(setFolder), "")
         _ = add("Rename Workspace…", #selector(renameWorkspace), "r")
         _ = add("Close Workspace", #selector(closeWorkspace), "")
@@ -85,7 +84,6 @@ final class WorkspaceMenu: NSObject, NSMenuDelegate {
 
     @objc private func jumpToLatest() { WorkspaceNotifier.shared.jumpToLatestUnread() }
     @objc private func newWorkspace() { WorkspaceManager.shared.createWithFolderPicker() }
-    @objc private func newEmptyWorkspace() { WorkspaceManager.shared.create() }
     @objc private func setFolder() {
         let manager = WorkspaceManager.shared
         guard let active = manager.items.first(where: \.isActive) else { return }

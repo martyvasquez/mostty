@@ -824,7 +824,9 @@ class AppDelegate: NSObject,
     @objc private func ghosttyNewWindow(_ notification: Notification) {
         let configAny = notification.userInfo?[Ghostty.Notification.NewSurfaceConfigKey]
         let config = configAny as? Ghostty.SurfaceConfiguration
-        _ = TerminalController.newWindow(ghostty, withBaseConfig: config)
+        // mostty: File > New Workspace (⌘N): a new workspace in the current
+        // tab's directory, with its name ready to edit.
+        MainActor.assumeIsolated { WorkspaceManager.shared.create(baseConfig: config) }
     }
 
     @objc private func ghosttyNewTab(_ notification: Notification) {
@@ -1063,7 +1065,8 @@ class AppDelegate: NSObject,
     }
 
     @IBAction func newWindow(_ sender: Any?) {
-        _ = TerminalController.newWindow(ghostty)
+        // mostty: New Workspace (menu with no terminal focused, Dock menu).
+        MainActor.assumeIsolated { WorkspaceManager.shared.create() }
     }
 
     @IBAction func newTab(_ sender: Any?) {
@@ -1200,7 +1203,7 @@ extension AppDelegate {
     }
 
     private func reloadDockMenu() {
-        let newWindow = NSMenuItem(title: "New Window", action: #selector(newWindow), keyEquivalent: "")
+        let newWindow = NSMenuItem(title: "New Workspace", action: #selector(newWindow), keyEquivalent: "")
         let newTab = NSMenuItem(title: "New Tab", action: #selector(newTab), keyEquivalent: "")
 
         dockMenu.removeAllItems()
