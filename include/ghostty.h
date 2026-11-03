@@ -1245,6 +1245,8 @@ GHOSTTY_API void ghostty_surface_free_text(ghostty_surface_t, ghostty_text_s*);
 GHOSTTY_API void ghostty_surface_set_display_id(ghostty_surface_t, uint32_t);
 GHOSTTY_API void* ghostty_surface_quicklook_font(ghostty_surface_t);
 GHOSTTY_API bool ghostty_surface_quicklook_word(ghostty_surface_t, ghostty_text_s*);
+// mostty: text of the line under the mouse cursor.
+GHOSTTY_API bool ghostty_surface_mostty_line_at_cursor(ghostty_surface_t, int32_t, ghostty_text_s*);
 #endif
 
 GHOSTTY_API ghostty_inspector_t ghostty_surface_inspector(ghostty_surface_t);

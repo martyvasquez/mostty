@@ -2550,6 +2550,38 @@ pub const CAPI = struct {
             return readTextLocked(ptr, sel, result);
         }
 
+        /// mostty: the text of one screen row: the row under the mouse
+        /// cursor moved by `offset` rows (negative = above).
+        export fn ghostty_surface_mostty_line_at_cursor(
+            ptr: *Surface,
+            offset: i32,
+            result: *Text,
+        ) bool {
+            const surface = &ptr.core_surface;
+            surface.renderer_state.mutex.lockUncancelable(global.io());
+            defer surface.renderer_state.mutex.unlock(global.io());
+
+            const sel = sel: {
+                const screen: *terminal.Screen = surface.renderer_state.terminal.screens.active;
+                const pos = ptr.getCursorPos() catch return false;
+                const pt_viewport = surface.posToViewport(pos.x, pos.y);
+                const at = screen.pages.pin(.{
+                    .viewport = .{
+                        .x = pt_viewport.x,
+                        .y = pt_viewport.y,
+                    },
+                }) orelse return false;
+                const n: usize = @intCast(@abs(offset));
+                var start = (if (offset < 0) at.up(n) else at.down(n)) orelse return false;
+                start.x = 0;
+                var end = start;
+                end.x = start.node.page().size.cols - 1;
+                break :sel terminal.Selection.init(start, end, false);
+            };
+
+            return readTextLocked(ptr, sel, result);
+        }
+
         export fn ghostty_inspector_metal_init(ptr: *Inspector, device: objc.c.id) bool {
             return ptr.initMetal(.fromId(device));
         }

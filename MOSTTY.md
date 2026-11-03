@@ -80,6 +80,13 @@ Also:
   Turn off with `defaults write com.mostty.app MosttyResumeClaude -bool false`.
 - **Close / quit warnings** say when Claude is working or waiting in what
   you're closing.
+- **⌘-click a command** Claude showed (a code block in its reply) to open a
+  new tab in the same folder with the whole command typed in, unwrapped and
+  unindented, ready for you to press Return. While ⌘ is held, commands get
+  a hand cursor and an underline, like links. mostty finds the command in
+  Claude Code's saved conversation (`~/.claude/projects/…/<session>.jsonl`)
+  rather than guessing from the screen; anything else (links, paths in
+  prose) gets the normal ⌘-click.
 
 Notes:
 - Claude Code has no hook for interrupts. Esc / ⌃C in the terminal clears
@@ -105,6 +112,9 @@ Change the sound (any name from /System/Library/Sounds, or `none`):
   skip the 1-per-second notification rate limit.
 - Engine: `src/config/Config.zig` no longer binds ⌘⇧T to undo by default
   (it's New Claude Tab; undo stays on ⌘Z).
+- Embedding API: `ghostty_surface_mostty_line_at_cursor` (in
+  `src/apprt/embedded.zig`, `include/ghostty.h`) reads a screen row near the
+  mouse, for ⌘-click commands.
 - Xcode project: app is `mostty.app` (bundle id `com.mostty.app`); the Swift
   module and the executable inside stay `Ghostty` / `ghostty` so upstream
   merges and shell integration keep working.

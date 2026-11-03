@@ -144,9 +144,11 @@ class SurfaceScrollView: NSView {
             }
             .store(in: &cancellables)
         surfaceView.$pointerStyle
+            .combineLatest(surfaceView.$mosttyCommandHover)
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] newStyle in
-                self?.scrollView.documentCursor = newStyle.cursor
+            .sink { [weak self] newStyle, commandHover in
+                // mostty: hand cursor over a command while ⌘ is held.
+                self?.scrollView.documentCursor = commandHover ? .pointingHand : newStyle.cursor
             }
             .store(in: &cancellables)
     }

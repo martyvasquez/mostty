@@ -83,6 +83,14 @@ extension Ghostty {
         // Whether the pointer should be visible or not
         @Published private(set) var pointerStyle: CursorStyle = .horizontalText
 
+        // mostty: ⌘ is held over a command in Claude's output (hand cursor).
+        @Published var mosttyCommandHover = false
+
+        // mostty: underline under the hovered command, and what it was
+        // computed for (to skip work while the mouse stays on one row).
+        var mosttyUnderlineLayers: [CALayer] = []
+        var mosttyHoverKey: String?
+
         // Whether the mouse is currently over this surface
         @Published private(set) var mouseOverSurface: Bool = false
 
@@ -921,6 +929,10 @@ extension Ghostty {
 
         override func mouseDown(with event: NSEvent) {
             guard let surface = self.surface else { return }
+            if mosttyOpenClickedCommand(event) {
+                suppressNextLeftMouseUp = true
+                return
+            }
             let mods = Ghostty.ghosttyMods(event.modifierFlags)
             ghostty_surface_mouse_button(surface, GHOSTTY_MOUSE_PRESS, GHOSTTY_MOUSE_LEFT, mods)
         }
@@ -1017,6 +1029,7 @@ extension Ghostty {
         }
 
         override func mouseExited(with event: NSEvent) {
+            mosttyClearCommandHover()
             mouseOverSurface = false
             mouseLocationInSurface = nil
             guard let surfaceModel else { return }
@@ -1051,6 +1064,8 @@ extension Ghostty {
             )
             surfaceModel.sendMousePos(mouseEvent)
 
+            mosttyUpdateCommandHover(event.modifierFlags)
+
             // Handle focus-follows-mouse
             if let window,
                let controller = window.windowController as? BaseTerminalController,
@@ -1075,6 +1090,7 @@ extension Ghostty {
         }
 
         override func scrollWheel(with event: NSEvent) {
+            mosttyClearCommandHover()
             guard let surfaceModel else { return }
 
             var x = event.scrollingDeltaX
@@ -1451,6 +1467,7 @@ extension Ghostty {
         }
 
         override func flagsChanged(with event: NSEvent) {
+            if mouseLocationInSurface != nil { mosttyUpdateCommandHover(event.modifierFlags) }
             let mod: UInt32
             switch event.keyCode {
             case 0x39: mod = GHOSTTY_MODS_CAPS.rawValue
@@ -2270,6 +2287,137 @@ extension Ghostty.SurfaceView: NSServicesMenuRequestor {
         text.withCString { ptr in
             ghostty_surface_text(surface, ptr, UInt(len - 1))
         }
+    }
+
+    /// mostty: ⌘-click on a line of a command Claude showed (a code block in
+    /// its reply) opens a new tab with that command typed in, ready to run.
+    /// Returns false (normal click handling, e.g. ⌘-click links) otherwise.
+    func mosttyOpenClickedCommand(_ event: NSEvent) -> Bool {
+        guard event.clickCount == 1,
+              let match = mosttyCommandUnderMouse(event.modifierFlags, at: event) else { return false }
+        mosttyClearCommandHover()
+        MainActor.assumeIsolated {
+            WorkspaceManager.shared.newTab(typing: match.command, pressReturn: false, from: self)
+        }
+        return true
+    }
+
+    /// The command under the mouse while only ⌘ is held, in a terminal
+    /// running Claude, plus where its rows are drawn.
+    private func mosttyCommandUnderMouse(
+        _ flags: NSEvent.ModifierFlags,
+        at event: NSEvent? = nil
+    ) -> (command: String, rows: [MosttyRow])? {
+        let mods = flags.intersection(.deviceIndependentFlagsMask)
+        guard mods.subtracting([.capsLock, .numericPad, .function]) == .command,
+              let surface else { return nil }
+        let session = MainActor.assumeIsolated { WorkspaceNotifier.shared.session(for: self) }
+        guard let session else { return nil }
+
+        // On a click, make sure the core has this exact position (it only
+        // learns it from move events).
+        if let event {
+            let pos = self.convert(event.locationInWindow, from: nil)
+            ghostty_surface_mouse_pos(surface, pos.x, frame.height - pos.y, Ghostty.ghosttyMods(flags))
+        }
+
+        // The row under the mouse plus a few above and below for context.
+        let n = ClaudeCommands.contextRows
+        var rows: [MosttyRow] = []
+        var clicked = 0
+        for offset in -n...n {
+            var text = ghostty_text_s()
+            guard ghostty_surface_mostty_line_at_cursor(surface, Int32(offset), &text) else {
+                guard offset != 0 else { return nil }
+                continue
+            }
+            if offset == 0 { clicked = rows.count }
+            rows.append(.init(text: String(cString: text.text), x: text.tl_px_x, baseline: text.tl_px_y))
+            ghostty_surface_free_text(surface, &text)
+        }
+
+        guard let match = ClaudeCommands.match(
+            rows: rows.map(\.text), clicked: clicked, sessionID: session.id) else { return nil }
+        return (match.command, Array(rows[match.rows]))
+    }
+
+    struct MosttyRow {
+        let text: String
+        /// Left edge of the row and its text baseline, in points from the
+        /// top-left of the view.
+        let x: Double
+        let baseline: Double
+    }
+
+    /// Show or hide the hand cursor and underline for the command under the
+    /// mouse, depending on whether ⌘ is held.
+    func mosttyUpdateCommandHover(_ flags: NSEvent.ModifierFlags) {
+        let mods = flags.intersection(.deviceIndependentFlagsMask)
+        guard mods.subtracting([.capsLock, .numericPad, .function]) == .command,
+              let surface else {
+            mosttyClearCommandHover()
+            return
+        }
+
+        // Skip the lookup while the mouse stays on the same row.
+        var text = ghostty_text_s()
+        guard ghostty_surface_mostty_line_at_cursor(surface, 0, &text) else {
+            mosttyClearCommandHover()
+            return
+        }
+        let key = "\(text.tl_px_y)|" + String(cString: text.text)
+        ghostty_surface_free_text(surface, &text)
+        guard key != mosttyHoverKey else { return }
+        mosttyHoverKey = key
+
+        guard let match = mosttyCommandUnderMouse(flags) else {
+            mosttyRemoveUnderline()
+            if mosttyCommandHover { mosttyCommandHover = false }
+            return
+        }
+        mosttyShowUnderline(match.rows)
+        if !mosttyCommandHover { mosttyCommandHover = true }
+        NSCursor.pointingHand.set()
+    }
+
+    func mosttyClearCommandHover() {
+        mosttyHoverKey = nil
+        mosttyRemoveUnderline()
+        if mosttyCommandHover {
+            mosttyCommandHover = false
+            pointerStyle.cursor.set()
+        }
+    }
+
+    private func mosttyShowUnderline(_ rows: [MosttyRow]) {
+        mosttyRemoveUnderline()
+        guard let layer, cellSize.width > 0 else { return }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for row in rows {
+            // Underline the text itself, not the indentation or trailing space.
+            let chars = Array(row.text)
+            guard let first = chars.firstIndex(where: { !$0.isWhitespace }),
+                  let last = chars.lastIndex(where: { !$0.isWhitespace }) else { continue }
+            let line = CALayer()
+            line.backgroundColor = NSColor.labelColor.withAlphaComponent(0.85).cgColor
+            let x = row.x + Double(first) * cellSize.width
+            let width = Double(last - first + 1) * cellSize.width
+            let top = row.baseline + 2 // just below the baseline
+            line.frame = CGRect(x: x, y: frame.height - top - 1, width: width, height: 1)
+            layer.addSublayer(line)
+            mosttyUnderlineLayers.append(line)
+        }
+        CATransaction.commit()
+    }
+
+    private func mosttyRemoveUnderline() {
+        guard !mosttyUnderlineLayers.isEmpty else { return }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        mosttyUnderlineLayers.forEach { $0.removeFromSuperlayer() }
+        mosttyUnderlineLayers = []
+        CATransaction.commit()
     }
 
     /// mostty: press Return. Text sent with mosttySendText arrives as a paste,

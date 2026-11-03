@@ -506,15 +506,23 @@ final class WorkspaceManager: ObservableObject {
     /// New tab in the active workspace (in the current tab's directory, like
     /// ⌘T) that starts Claude Code.
     func newClaudeTab() {
+        newTab(typing: "claude", pressReturn: true)
+    }
+
+    /// New tab next to `from` (default: the active one), in that terminal's
+    /// directory, with `command` typed into its shell. Without `pressReturn`
+    /// it is left for the user to check and run.
+    func newTab(typing command: String, pressReturn: Bool, from source: Ghostty.SurfaceView? = nil) {
         guard let ghostty = (NSApp.delegate as? AppDelegate)?.ghostty,
-              let parent = activeWindow else { return }
+              let parent = source?.window ?? activeWindow else { return }
         var config = Ghostty.SurfaceConfiguration()
-        if let pwd = (parent.windowController as? TerminalController)?.focusedSurface?.pwd {
+        let sourceSurface = source ?? (parent.windowController as? TerminalController)?.focusedSurface
+        if let pwd = sourceSurface?.pwd {
             config.workingDirectory = pwd
         }
         guard let c = TerminalController.newTab(ghostty, from: parent, withBaseConfig: config),
               let surface = c.focusedSurface ?? Array(c.surfaceTree).first else { return }
-        WorkspaceNotifier.shared.run("claude", in: surface)
+        WorkspaceNotifier.shared.run(command, in: surface, pressReturn: pressReturn)
     }
 
     /// Start renaming the active workspace.

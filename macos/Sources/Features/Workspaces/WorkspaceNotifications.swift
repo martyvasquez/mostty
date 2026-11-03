@@ -241,19 +241,29 @@ final class WorkspaceNotifier: ObservableObject {
         }
     }
 
-    /// Whether Claude Code has a saved conversation with this id, i.e.
-    /// `<config>/projects/<project>/<id>.jsonl` exists.
+    /// Whether Claude Code has a saved conversation with this id.
     private static func transcriptExists(for id: String) -> Bool {
+        transcriptURL(for: id) != nil
+    }
+
+    /// Claude Code's saved conversation with this id:
+    /// `<config>/projects/<project>/<id>.jsonl`.
+    nonisolated static func transcriptURL(for id: String) -> URL? {
         let fm = FileManager.default
         let configDir = ProcessInfo.processInfo.environment["CLAUDE_CONFIG_DIR"]
             .map { URL(fileURLWithPath: $0) }
             ?? fm.homeDirectoryForCurrentUser.appendingPathComponent(".claude")
         let projects = configDir.appendingPathComponent("projects")
         guard let dirs = try? fm.contentsOfDirectory(
-            at: projects, includingPropertiesForKeys: nil) else { return false }
-        return dirs.contains {
-            fm.fileExists(atPath: $0.appendingPathComponent("\(id).jsonl").path)
-        }
+            at: projects, includingPropertiesForKeys: nil) else { return nil }
+        return dirs
+            .map { $0.appendingPathComponent("\(id).jsonl") }
+            .first { fm.fileExists(atPath: $0.path) }
+    }
+
+    /// The Claude session running in a terminal, if mostty knows it.
+    func session(for surface: Ghostty.SurfaceView) -> ClaudeSession? {
+        sessions[surface.id]
     }
 
     private func sendResume(_ session: ClaudeSession, to surface: Ghostty.SurfaceView, attempt: Int) {
@@ -269,7 +279,7 @@ final class WorkspaceNotifier: ObservableObject {
     /// is at its first prompt. Going through the shell (rather than starting
     /// the command directly) keeps mostty's `claude` wrapper and hooks, and
     /// leaves the shell there when the command exits.
-    func run(_ command: String, in surface: Ghostty.SurfaceView, attempt: Int = 0) {
+    func run(_ command: String, in surface: Ghostty.SurfaceView, pressReturn: Bool = true, attempt: Int = 0) {
         // Ghostty's shell integration reports the working directory at the
         // prompt, so `pwd` becoming non-nil is the signal. Typing earlier
         // works too (the tty buffers it) but shows the command twice. Give up
@@ -278,12 +288,12 @@ final class WorkspaceNotifier: ObservableObject {
             guard let surface else { return }
             let ready = surface.surface != nil && surface.pwd != nil
             guard ready || attempt >= 40 else {
-                self.run(command, in: surface, attempt: attempt + 1)
+                self.run(command, in: surface, pressReturn: pressReturn, attempt: attempt + 1)
                 return
             }
             guard surface.surface != nil else { return }
             surface.mosttySendText(command)
-            surface.mosttySendReturn()
+            if pressReturn { surface.mosttySendReturn() }
         }
     }
 
