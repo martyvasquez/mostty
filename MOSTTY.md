@@ -141,9 +141,24 @@ To try a release locally first:
 
 Needs Xcode 26+ (with Metal Toolchain) and Zig 0.17.
 
-    git pull --rebase upstream main   # upstream = ghostty-org/ghostty
     zig build -Doptimize=ReleaseFast
     open zig-out/mostty.app
 
 The bundle id is `com.mostty.app` so it runs side by side with Ghostty and
 shares your Ghostty config file.
+
+## Pulling in Ghostty updates
+
+Merge Ghostty's `main` (remote `upstream` = ghostty-org/ghostty) every week
+or two so each merge stays small:
+
+    git fetch upstream
+    git merge upstream/main
+    zig build -Doptimize=ReleaseFast && open zig-out/mostty.app
+    git push origin main              # releases it
+
+Merge, don't rebase: `main` is published and every push releases (the build
+number is the commit count), so rewriting it would need a force push.
+
+Conflicts, if any, will be in the files listed under "Changes to Ghostty";
+`macos/Sources/Features/Workspaces/` is all mostty's own code.
