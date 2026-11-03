@@ -1874,10 +1874,11 @@ extension Ghostty {
         /// Handle a user notification click
         func handleUserNotification(notification: UNNotification, focus: Bool) {
             let id = notification.request.identifier
-            guard self.notificationIdentifiers.remove(id) != nil else { return }
+            self.notificationIdentifiers.remove(id)
+            // mostty: a click jumps to this terminal: its workspace and tab
+            // (even if we had stopped tracking the notification).
             if focus {
-                self.window?.makeKeyAndOrderFront(self)
-                Ghostty.moveFocus(to: self)
+                WorkspaceManager.shared.show(self)
             }
         }
 

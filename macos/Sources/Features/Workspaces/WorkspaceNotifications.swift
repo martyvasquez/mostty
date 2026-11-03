@@ -343,10 +343,7 @@ final class WorkspaceNotifier: ObservableObject {
     }
 
     private func focus(_ surface: Ghostty.SurfaceView) {
-        guard let window = surface.window,
-              let controller = window.windowController as? BaseTerminalController else { return }
-        window.tabGroup?.selectedWindow = window
-        controller.focusSurface(surface)
+        WorkspaceManager.shared.show(surface)
     }
 
     // MARK: Notifications

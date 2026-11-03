@@ -78,6 +78,12 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     /// mostty: The workspace of the most recently main window.
     static var lastMainWorkspaceID: UUID? { lastMain?.workspaceID }
 
+    /// mostty: Set once this window/tab starts closing. While AppKit tears it
+    /// down it is already out of its tab group but still in NSApp.windows;
+    /// WorkspaceManager must not mistake it for a tab dragged out into its
+    /// own workspace.
+    private(set) var mosttyClosing = false
+
     /// The notification cancellable for focused surface property changes.
     private var surfaceAppearanceCancellables: Set<AnyCancellable> = []
 
@@ -1306,6 +1312,7 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     }
 
     override func windowWillClose(_ notification: Notification) {
+        mosttyClosing = true
         super.windowWillClose(notification)
         cancelPendingInitialPresentation()
         self.relabelTabs()

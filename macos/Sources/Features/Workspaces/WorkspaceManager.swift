@@ -150,12 +150,14 @@ final class WorkspaceManager: ObservableObject {
         var usedIDs = Set<UUID>()
         var result: [Group] = []
 
-        for controller in TerminalController.all {
+        for controller in TerminalController.all where !controller.mosttyClosing {
             guard let window = controller.window else { continue }
             guard !seen.contains(ObjectIdentifier(controller)) else { continue }
 
             let windows = window.tabbedWindows ?? [window]
-            let controllers = windows.compactMap { $0.windowController as? TerminalController }
+            let controllers = windows
+                .compactMap { $0.windowController as? TerminalController }
+                .filter { !$0.mosttyClosing }
             controllers.forEach { seen.insert(ObjectIdentifier($0)) }
             guard let first = controllers.first else { continue }
 
@@ -373,6 +375,16 @@ final class WorkspaceManager: ObservableObject {
         target.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         refresh()
+    }
+
+    /// Show a terminal: switch to its workspace, select its tab, focus it.
+    /// Used when a notification (toast or macOS banner) is clicked.
+    func show(_ surface: Ghostty.SurfaceView) {
+        guard let window = surface.window,
+              let controller = window.windowController as? TerminalController else { return }
+        window.tabGroup?.selectedWindow = window
+        activate(controller.workspaceID)
+        controller.focusSurface(surface)
     }
 
     /// The visible workspace's window is minimized: restore it. For a click
