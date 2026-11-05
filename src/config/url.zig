@@ -48,8 +48,10 @@ const no_trailing_punctuation =
     \\(?<![,.])
 ;
 
-const no_trailing_colon =
-    \\(?<!:)
+// Paths may not end with a colon (line:col suffixes, "file:" labels) or
+// with sentence punctuation, so "see /tmp/foo.md." links /tmp/foo.md.
+const no_trailing_path_punctuation =
+    \\(?<![:.,])
 ;
 
 const dotted_path_lookahead =
@@ -87,12 +89,12 @@ const rooted_or_relative_path_branch =
     dotted_path_lookahead ++
     path_chars ++ "+" ++
     dotted_path_space_segments ++
-    no_trailing_colon ++
+    no_trailing_path_punctuation ++
     "|" ++
     non_dotted_path_lookahead ++
     path_chars ++ "+" ++
     any_path_space_segments ++
-    no_trailing_colon ++
+    no_trailing_path_punctuation ++
     ")";
 
 // Branch 3: Bare relative paths such as src/config/url.zig.
@@ -104,7 +106,7 @@ const bare_relative_path_branch =
     dotted_path_lookahead ++
     bare_relative_path_prefix ++
     path_chars ++ "+" ++
-    no_trailing_colon;
+    no_trailing_path_punctuation;
 
 pub const regex =
     scheme_url_branch ++
@@ -337,7 +339,24 @@ test "url regex" {
         // Trailing whitespace isn't part of a detected file path.
         .{
             .input = "./spaces-end.   ",
-            .expect = "./spaces-end.",
+            .expect = "./spaces-end",
+        },
+        // Sentence punctuation after a path isn't part of it.
+        .{
+            .input = "I've updated /Users/me/site/DESIGN_BRIEF.md. It now points",
+            .expect = "/Users/me/site/DESIGN_BRIEF.md",
+        },
+        .{
+            .input = "See /tmp/a.txt, then go",
+            .expect = "/tmp/a.txt",
+        },
+        .{
+            .input = "Edited src/config/url.zig.",
+            .expect = "src/config/url.zig",
+        },
+        .{
+            .input = "Open ./docs/notes.md. Done.",
+            .expect = "./docs/notes.md",
         },
         // File paths with internal spaces
         .{
